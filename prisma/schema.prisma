@@ -1,0 +1,358 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum ConnectionType {
+  STATIC
+  DYNAMIC
+  PPPOE
+}
+
+enum ClientStatus {
+  ACTIVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum ServiceType {
+  PREPAID
+  POSTPAID
+}
+
+enum DurationType {
+  HALF_MONTHLY
+  MONTHLY
+  QUARTERLY
+  HALF_ANNUAL
+  ANNUAL
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CARD
+  ONLINE
+}
+
+enum UserRole {
+  WSP_ADMIN
+  POS_MANAGER
+  CLIENT
+}
+
+enum IpStatus {
+  AVAILABLE
+  ASSIGNED
+  RESERVED
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum SuspensionReason {
+  NON_PAYMENT
+  VIOLATION
+  MAINTENANCE
+  OTHER
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  SUSPEND
+  REACTIVATE
+  PAYMENT
+  UPGRADE
+}
+
+// Models
+model User {
+  id            String   @id @default(uuid()) @db.Uuid
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          UserRole
+  posId         String?  @map("pos_id") @db.Uuid
+  clientId      String?  @unique @map("client_id") @db.Uuid
+  isActive      Boolean  @default(true) @map("is_active")
+  lastLogin     DateTime? @map("last_login")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  pos           POS?     @relation(fields: [posId], references: [id])
+  client        Client?  @relation(fields: [clientId], references: [id])
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model POS {
+  id                      String   @id @default(uuid()) @db.Uuid
+  name                    String
+  location                String
+  contactPhone            String?  @map("contact_phone")
+  allocatedBandwidthMbps  Decimal  @map("allocated_bandwidth_mbps") @db.Decimal(10, 2)
+  currentUsageMbps        Decimal  @default(0) @map("current_usage_mbps") @db.Decimal(10, 2)
+  isActive                Boolean  @default(true) @map("is_active")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  clients                 Client[]
+  managers                User[]
+  ipPool                  StaticIpPool[]
+  pppoeRequests           PppoeChangeRequest[]
+
+  @@map("pos")
+}
+
+model Client {
+  id                String          @id @default(uuid()) @db.Uuid
+  posId             String          @map("pos_id") @db.Uuid
+  fullName          String          @map("full_name")
+  phone             String
+  email             String          @unique
+  address           String
+  nationalId        String?         @map("national_id")
+  connectionType    ConnectionType  @map("connection_type")
+  pppoeUsername     String?         @unique @map("pppoe_username")
+  pppoePassword     String?         @map("pppoe_password")
+  status            ClientStatus    @default(ACTIVE)
+  accountBalance    Decimal         @default(0) @map("account_balance") @db.Decimal(10, 2)
+  autoRenewEnabled  Boolean         @default(true) @map("auto_renew_enabled")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  pos               POS             @relation(fields: [posId], references: [id])
+  subscriptions     Subscription[]
+  invoices          Invoice[]
+  payments          Payment[]
+  staticIp          StaticIpPool?
+  suspensionHistory SuspensionHistory[]
+  pppoeRequests     PppoeChangeRequest[]
+  usageLogs         UsageLog[]
+  user              User?
+
+  @@map("clients")
+}
+
+model StaticIpPool {
+  id          String   @id @default(uuid()) @db.Uuid
+  posId       String   @map("pos_id") @db.Uuid
+  ipAddress   String   @unique @map("ip_address")
+  subnetMask  String   @map("subnet_mask")
+  gateway     String
+  dnsPrimary  String?  @map("dns_primary")
+  dnsSecondary String? @map("dns_secondary")
+  status      IpStatus @default(AVAILABLE)
+  clientId    String?  @unique @map("client_id") @db.Uuid
+  assignedAt  DateTime? @map("assigned_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relations
+  pos         POS      @relation(fields: [posId], references: [id])
+  client      Client?  @relation(fields: [clientId], references: [id])
+
+  @@map("static_ip_pool")
+}
+
+model ServicePlan {
+  id                String       @id @default(uuid()) @db.Uuid
+  planName          String       @map("plan_name")
+  serviceType       ServiceType  @map("service_type")
+  durationType      DurationType @map("duration_type")
+  durationDays      Int          @map("duration_days")
+  cost              Decimal      @db.Decimal(10, 2)
+  downloadSpeedMbps Decimal      @map("download_speed_mbps") @db.Decimal(10, 2)
+  uploadSpeedMbps   Decimal      @map("upload_speed_mbps") @db.Decimal(10, 2)
+  dataCapacityGb    Int?         @map("data_capacity_gb")
+  isActive          Boolean      @default(true) @map("is_active")
+  description       String?
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  subscriptions     Subscription[]
+
+  @@map("service_plans")
+}
+
+model Subscription {
+  id                        String             @id @default(uuid()) @db.Uuid
+  clientId                  String             @map("client_id") @db.Uuid
+  planId                    String             @map("plan_id") @db.Uuid
+  startDate                 DateTime           @map("start_date")
+  endDate                   DateTime           @map("end_date")
+  status                    SubscriptionStatus @default(ACTIVE)
+  isAutoRenewed             Boolean            @default(false) @map("is_auto_renewed")
+  bandwidthAllocatedMbps    Decimal            @map("bandwidth_allocated_mbps") @db.Decimal(10, 2)
+  upgradedToSubscriptionId  String?            @unique @map("upgraded_to_subscription_id") @db.Uuid
+  createdAt                 DateTime           @default(now()) @map("created_at")
+  updatedAt                 DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  client                    Client             @relation(fields: [clientId], references: [id])
+  plan                      ServicePlan        @relation(fields: [planId], references: [id])
+  invoices                  Invoice[]
+  usageLogs                 UsageLog[]
+  upgradedToSubscription    Subscription?      @relation("SubscriptionUpgrade", fields: [upgradedToSubscriptionId], references: [id])
+  upgradedFromSubscription  Subscription?      @relation("SubscriptionUpgrade")
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String        @id @default(uuid()) @db.Uuid
+  clientId       String        @map("client_id") @db.Uuid
+  subscriptionId String?       @map("subscription_id") @db.Uuid
+  invoiceNumber  String        @unique @map("invoice_number")
+  amount         Decimal       @db.Decimal(10, 2)
+  issueDate      DateTime      @map("issue_date")
+  dueDate        DateTime      @map("due_date")
+  paymentStatus  PaymentStatus @default(UNPAID) @map("payment_status")
+  notes          String?
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  client         Client        @relation(fields: [clientId], references: [id])
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  payment        Payment?
+
+  @@map("invoices")
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  invoiceId        String        @unique @map("invoice_id") @db.Uuid
+  clientId         String        @map("client_id") @db.Uuid
+  paymentReference String?       @map("payment_reference")
+  amountPaid       Decimal       @map("amount_paid") @db.Decimal(10, 2)
+  extraAmount      Decimal       @default(0) @map("extra_amount") @db.Decimal(10, 2)
+  paymentMethod    PaymentMethod @map("payment_method")
+  paymentDate      DateTime      @default(now()) @map("payment_date")
+  receivedBy       String?       @map("received_by")
+  notes            String?
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  // Relations
+  invoice          Invoice       @relation(fields: [invoiceId], references: [id])
+  client           Client        @relation(fields: [clientId], references: [id])
+
+  @@map("payments")
+}
+
+model BandwidthPool {
+  id                      String   @id @default(uuid()) @db.Uuid
+  totalWspBandwidthMbps   Decimal  @map("total_wsp_bandwidth_mbps") @db.Decimal(10, 2)
+  allocatedBandwidthMbps  Decimal  @map("allocated_bandwidth_mbps") @db.Decimal(10, 2)
+  availableBandwidthMbps  Decimal  @map("available_bandwidth_mbps") @db.Decimal(10, 2)
+  usagePercentage         Decimal  @map("usage_percentage") @db.Decimal(5, 2)
+  lastUpdated             DateTime @updatedAt @map("last_updated")
+
+  @@map("bandwidth_pool")
+}
+
+model PppoeChangeRequest {
+  id              String        @id @default(uuid()) @db.Uuid
+  clientId        String        @map("client_id") @db.Uuid
+  posId           String        @map("pos_id") @db.Uuid
+  currentUsername String        @map("current_username")
+  newUsername     String        @map("new_username")
+  newPassword     String        @map("new_password")
+  status          RequestStatus @default(PENDING)
+  reason          String?
+  requestedBy     String?       @map("requested_by")
+  approvedBy      String?       @map("approved_by")
+  requestedAt     DateTime      @default(now()) @map("requested_at")
+  processedAt     DateTime?     @map("processed_at")
+
+  // Relations
+  client          Client        @relation(fields: [clientId], references: [id])
+  pos             POS           @relation(fields: [posId], references: [id])
+
+  @@map("pppoe_change_requests")
+}
+
+model UsageLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  clientId       String       @map("client_id") @db.Uuid
+  subscriptionId String       @map("subscription_id") @db.Uuid
+  downloadMb     Decimal      @map("download_mb") @db.Decimal(15, 2)
+  uploadMb       Decimal      @map("upload_mb") @db.Decimal(15, 2)
+  totalUsageMb   Decimal      @map("total_usage_mb") @db.Decimal(15, 2)
+  logDate        DateTime     @map("log_date")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  client         Client       @relation(fields: [clientId], references: [id])
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@map("usage_logs")
+}
+
+model SuspensionHistory {
+  id               String           @id @default(uuid()) @db.Uuid
+  clientId         String           @map("client_id") @db.Uuid
+  suspensionReason SuspensionReason @map("suspension_reason")
+  reasonDetails    String?          @map("reason_details")
+  suspendedAt      DateTime         @map("suspended_at")
+  reactivatedAt    DateTime?        @map("reactivated_at")
+  suspendedBy      String?          @map("suspended_by") @db.Uuid
+  reactivatedBy    String?          @map("reactivated_by") @db.Uuid
+
+  // Relations
+  client           Client           @relation(fields: [clientId], references: [id])
+
+  @@map("suspension_history")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  userRole    UserRole    @map("user_role")
+  entityType  String      @map("entity_type")
+  entityId    String?     @map("entity_id") @db.Uuid
+  action      AuditAction
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?     @map("ip_address")
+  userAgent   String?     @map("user_agent")
+  description String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
