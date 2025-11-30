@@ -8,6 +8,7 @@ import { PosModule } from './pos/pos.module';
 import { ClientsModule } from './clients/clients.module';
 import { StaticIpModule } from './static-ip/static-ip.module';
 import { ServicePlansModule } from './service-plans/service-plans.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ServicePlansModule } from './service-plans/service-plans.module';
     ClientsModule,
     StaticIpModule,
     ServicePlansModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
