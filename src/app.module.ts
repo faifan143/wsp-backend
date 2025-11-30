@@ -12,6 +12,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PppoeRequestsModule } from './pppoe-requests/pppoe-requests.module';
+import { BandwidthPoolModule } from './bandwidth-pool/bandwidth-pool.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PppoeRequestsModule } from './pppoe-requests/pppoe-requests.module';
     InvoicesModule,
     PaymentsModule,
     PppoeRequestsModule,
+    BandwidthPoolModule,
   ],
   controllers: [AppController],
   providers: [AppService],
