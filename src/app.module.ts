@@ -14,6 +14,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { PppoeRequestsModule } from './pppoe-requests/pppoe-requests.module';
 import { BandwidthPoolModule } from './bandwidth-pool/bandwidth-pool.module';
 import { SuspensionHistoryModule } from './suspension-history/suspension-history.module';
+import { AuditLogsModule } from './audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SuspensionHistoryModule } from './suspension-history/suspension-history
     PppoeRequestsModule,
     BandwidthPoolModule,
     SuspensionHistoryModule,
+    AuditLogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
