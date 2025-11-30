@@ -11,6 +11,7 @@ import { ServicePlansModule } from './service-plans/service-plans.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
+import { PppoeRequestsModule } from './pppoe-requests/pppoe-requests.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PaymentsModule } from './payments/payments.module';
     SubscriptionsModule,
     InvoicesModule,
     PaymentsModule,
+    PppoeRequestsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
