@@ -2,10 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { UpdateBandwidthPoolDto } from './dto/update-bandwidth-pool.dto';
 import { Decimal } from '@prisma/client/runtime/library';
+import { AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
 export class BandwidthPoolService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
   private async getOrCreatePool() {
     let pool = await this.prisma.bandwidthPool.findFirst();
@@ -51,7 +56,7 @@ export class BandwidthPoolService {
     };
   }
 
-  async update(dto: UpdateBandwidthPoolDto) {
+  async update(dto: UpdateBandwidthPoolDto, currentUser?: any) {
     // Ensure pool exists and get it
     const pool = await this.getOrCreatePool();
 
@@ -62,6 +67,23 @@ export class BandwidthPoolService {
         totalWspBandwidthMbps: new Decimal(dto.totalBandwidthMbps),
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.BANDWIDTH_POOL,
+        entityId: pool.id,
+        oldValues: { totalWspBandwidthMbps: pool.totalWspBandwidthMbps.toNumber() },
+        newValues: { totalWspBandwidthMbps: dto.totalBandwidthMbps },
+      });
+    }
 
     // Return updated summary
     return this.getSummary();

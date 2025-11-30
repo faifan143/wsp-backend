@@ -27,8 +27,8 @@ export class StaticIpController {
   @Post()
   @Roles('WSP_ADMIN')
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createStaticIpDto: CreateStaticIpDto) {
-    return this.staticIpService.create(createStaticIpDto);
+  create(@Body() createStaticIpDto: CreateStaticIpDto, @Request() req) {
+    return this.staticIpService.create(createStaticIpDto, req.user);
   }
 
   @Get()
@@ -49,14 +49,14 @@ export class StaticIpController {
 
   @Patch(':id')
   @Roles('WSP_ADMIN')
-  update(@Param('id') id: string, @Body() updateStaticIpDto: UpdateStaticIpDto) {
-    return this.staticIpService.update(id, updateStaticIpDto);
+  update(@Param('id') id: string, @Body() updateStaticIpDto: UpdateStaticIpDto, @Request() req) {
+    return this.staticIpService.update(id, updateStaticIpDto, req.user);
   }
 
   @Patch(':id/release')
   @Roles('WSP_ADMIN')
-  release(@Param('id') id: string) {
-    return this.staticIpService.release(id);
+  release(@Param('id') id: string, @Request() req) {
+    return this.staticIpService.release(id, req.user);
   }
 }
 

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEmail } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsBoolean } from 'class-validator';
 
 export class UpdateClientDto {
   @IsOptional()
@@ -20,5 +20,8 @@ export class UpdateClientDto {
   @IsOptional()
   @IsString()
   nationalId?: string;
-}
 
+  @IsOptional()
+  @IsBoolean()
+  autoRenewEnabled?: boolean;
+}

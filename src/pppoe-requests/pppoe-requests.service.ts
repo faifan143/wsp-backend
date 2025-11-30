@@ -9,12 +9,16 @@ import { CreatePppoeRequestDto } from './dto/create-pppoe-request.dto';
 import { ApprovePppoeRequestDto } from './dto/approve-pppoe-request.dto';
 import { RejectPppoeRequestDto } from './dto/reject-pppoe-request.dto';
 import { CompletePppoeRequestDto } from './dto/complete-pppoe-request.dto';
-import { RequestStatus } from '@prisma/client';
+import { RequestStatus, AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class PppoeRequestsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
   async create(createPppoeRequestDto: CreatePppoeRequestDto, currentUser: any) {
     // Fetch client with POS
@@ -98,6 +102,25 @@ export class PppoeRequestsService {
             role: true,
           },
         },
+      },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.CREATE,
+      entityType: EntityType.PPPOE_CHANGE_REQUEST,
+      entityId: pppoeRequest.id,
+      oldValues: null,
+      newValues: {
+        clientId: pppoeRequest.clientId,
+        currentUsername: pppoeRequest.currentUsername,
+        status: pppoeRequest.status,
       },
     });
 
@@ -297,6 +320,22 @@ export class PppoeRequestsService {
       },
     });
 
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.PPPOE_CHANGE_REQUEST,
+      entityId: id,
+      oldValues: { status: pppoeRequest.status },
+      newValues: { status: RequestStatus.APPROVED },
+      description: 'Approve PPPoE change',
+    });
+
     return approvedRequest;
   }
 
@@ -371,6 +410,22 @@ export class PppoeRequestsService {
           },
         },
       },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.PPPOE_CHANGE_REQUEST,
+      entityId: id,
+      oldValues: { status: pppoeRequest.status },
+      newValues: { status: RequestStatus.REJECTED },
+      description: `Reject PPPoE change. Reason: ${rejectPppoeRequestDto.rejectionReason}`,
     });
 
     return rejectedRequest;
@@ -471,6 +526,22 @@ export class PppoeRequestsService {
           },
         },
       },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.PPPOE_CHANGE_REQUEST,
+      entityId: id,
+      oldValues: { status: pppoeRequest.status },
+      newValues: { status: RequestStatus.COMPLETED },
+      description: `Complete PPPoE change (applied credentials)${completePppoeRequestDto.technicianNote ? ` - ${completePppoeRequestDto.technicianNote}` : ''}`,
     });
 
     return completedRequest;

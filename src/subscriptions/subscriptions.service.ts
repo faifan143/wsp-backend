@@ -9,11 +9,15 @@ import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { RenewSubscriptionDto } from './dto/renew-subscription.dto';
 import { UpgradeSubscriptionDto } from './dto/upgrade-subscription.dto';
 import { CreateUsageLogDto } from './dto/create-usage-log.dto';
-import { SubscriptionStatus, ClientStatus } from '@prisma/client';
+import { SubscriptionStatus, ClientStatus, AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
   private getManagerScope(currentUser: any): { posId?: string } | null {
     if (currentUser?.role === 'WSP_ADMIN') {
@@ -117,6 +121,27 @@ export class SubscriptionsService {
           },
         },
         plan: true,
+      },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.CREATE,
+      entityType: EntityType.SUBSCRIPTION,
+      entityId: subscription.id,
+      oldValues: null,
+      newValues: {
+        clientId: subscription.clientId,
+        planId: subscription.planId,
+        status: subscription.status,
+        startDate: subscription.startDate,
+        endDate: subscription.endDate,
       },
     });
 
@@ -240,6 +265,22 @@ export class SubscriptionsService {
       },
     });
 
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.SUBSCRIPTION,
+      entityId: id,
+      oldValues: { status: subscription.status },
+      newValues: { status: SubscriptionStatus.TERMINATED },
+      description: 'Terminate subscription',
+    });
+
     return terminatedSubscription;
   }
 
@@ -314,6 +355,28 @@ export class SubscriptionsService {
         },
         plan: true,
       },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.SUBSCRIPTION,
+      entityId: id,
+      oldValues: {
+        startDate: subscription.startDate,
+        endDate: subscription.endDate,
+      },
+      newValues: {
+        startDate: renewalStartDate,
+        endDate: newEndDate,
+      },
+      description: 'Renew subscription',
     });
 
     return renewedSubscription;
@@ -420,6 +483,30 @@ export class SubscriptionsService {
       data: { upgradedToSubscriptionId: newSubscription.id },
     });
 
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPGRADE,
+      entityType: EntityType.SUBSCRIPTION,
+      entityId: newSubscription.id,
+      oldValues: {
+        subscriptionId: id,
+        planId: oldSubscription.planId,
+        planName: oldSubscription.plan.planName,
+      },
+      newValues: {
+        subscriptionId: newSubscription.id,
+        planId: newPlan.id,
+        planName: newPlan.planName,
+      },
+      description: `Upgrade subscription from plan ${oldSubscription.plan.planName} to ${newPlan.planName}`,
+    });
+
     return newSubscription;
   }
 
@@ -457,6 +544,26 @@ export class SubscriptionsService {
         downloadMb: createUsageLogDto.downloadMb,
         uploadMb: createUsageLogDto.uploadMb,
         logDate,
+      },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.CREATE,
+      entityType: EntityType.USAGE_LOG,
+      entityId: usageLog.id,
+      oldValues: null,
+      newValues: {
+        subscriptionId,
+        downloadMb: usageLog.downloadMb,
+        uploadMb: usageLog.uploadMb,
+        logDate: usageLog.logDate,
       },
     });
 

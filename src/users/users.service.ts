@@ -8,14 +8,18 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserRole } from '@prisma/client';
+import { UserRole, AuditAction, EntityType } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
-  async create(createUserDto: CreateUserDto) {
+  async create(createUserDto: CreateUserDto, currentUser?: any) {
     // Validate username uniqueness
     const existingUsername = await this.prisma.user.findUnique({
       where: { username: createUserDto.username },
@@ -97,6 +101,30 @@ export class UsersService {
       },
     });
 
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.CREATE,
+        entityType: EntityType.USER,
+        entityId: user.id,
+        oldValues: null,
+        newValues: {
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          posId: user.posId,
+          clientId: user.clientId,
+          isActive: user.isActive,
+        },
+      });
+    }
+
     return user;
   }
 
@@ -146,7 +174,7 @@ export class UsersService {
     return user;
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto, requesterId?: string) {
+  async update(id: string, updateUserDto: UpdateUserDto, currentUser?: any) {
     const existingUser = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -247,10 +275,50 @@ export class UsersService {
       },
     });
 
+    // Audit log
+    if (currentUser) {
+      const oldValues: any = {};
+      const newValues: any = {};
+
+      if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
+        oldValues.email = existingUser.email;
+        newValues.email = updateUserDto.email;
+      }
+      if (updateUserDto.role && updateUserDto.role !== existingUser.role) {
+        oldValues.role = existingUser.role;
+        newValues.role = updateUserDto.role;
+      }
+      if (updateUserDto.password) {
+        newValues.passwordChanged = true;
+      }
+      if (updateData.posId !== undefined && updateData.posId !== existingUser.posId) {
+        oldValues.posId = existingUser.posId;
+        newValues.posId = updateData.posId;
+      }
+      if (updateData.clientId !== undefined && updateData.clientId !== existingUser.clientId) {
+        oldValues.clientId = existingUser.clientId;
+        newValues.clientId = updateData.clientId;
+      }
+
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.USER,
+        entityId: id,
+        oldValues: Object.keys(oldValues).length > 0 ? oldValues : null,
+        newValues: Object.keys(newValues).length > 0 ? newValues : null,
+      });
+    }
+
     return updatedUser;
   }
 
-  async activate(id: string) {
+  async activate(id: string, currentUser?: any) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -276,10 +344,28 @@ export class UsersService {
       },
     });
 
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.USER,
+        entityId: id,
+        oldValues: { isActive: user.isActive },
+        newValues: { isActive: true },
+        description: 'Activate user',
+      });
+    }
+
     return activatedUser;
   }
 
-  async deactivate(id: string, requesterId?: string) {
+  async deactivate(id: string, currentUser?: any) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -289,7 +375,7 @@ export class UsersService {
     }
 
     // Prevent self-deactivation
-    if (requesterId && id === requesterId) {
+    if (currentUser && id === currentUser.id) {
       throw new ForbiddenException('Cannot deactivate your own account');
     }
 
@@ -309,6 +395,24 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.USER,
+        entityId: id,
+        oldValues: { isActive: user.isActive },
+        newValues: { isActive: false },
+        description: 'Deactivate user',
+      });
+    }
 
     return deactivatedUser;
   }

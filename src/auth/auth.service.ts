@@ -1,6 +1,8 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../common/prisma.service';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
+import { AuditAction, EntityType, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -8,6 +10,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private auditLogger: AuditLoggerService,
   ) {}
 
   async validateUser(username: string, password: string): Promise<any> {
@@ -53,7 +56,7 @@ export class AuthService {
     return result;
   }
 
-  async login(user: any) {
+  async login(user: any, ipAddress?: string, userAgent?: string) {
     const payload = {
       sub: user.id,
       username: user.username,
@@ -62,14 +65,49 @@ export class AuthService {
       clientId: user.clientId,
     };
 
+    const accessToken = this.jwtService.sign(payload);
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: user.id,
+        userRole: user.role as UserRole,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
+      },
+      action: AuditAction.LOGIN,
+      entityType: EntityType.USER,
+      entityId: user.id,
+    });
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
     };
   }
 
-  async logout() {
-    // Placeholder for future implementation
-    // Could include token blacklisting, audit logging, etc.
+  async logout(userId?: string, ipAddress?: string, userAgent?: string) {
+    // Audit log
+    if (userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, role: true },
+      });
+
+      if (user) {
+        await this.auditLogger.log({
+          context: {
+            userId: user.id,
+            userRole: user.role as UserRole,
+            ipAddress: ipAddress || null,
+            userAgent: userAgent || null,
+          },
+          action: AuditAction.LOGOUT,
+          entityType: EntityType.USER,
+          entityId: user.id,
+        });
+      }
+    }
+
     return {
       message: 'Logout successful',
     };

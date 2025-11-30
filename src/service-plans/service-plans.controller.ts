@@ -7,6 +7,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -26,8 +27,8 @@ export class ServicePlansController {
   @Post()
   @Roles('WSP_ADMIN')
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createServicePlanDto: CreateServicePlanDto) {
-    return this.servicePlansService.create(createServicePlanDto);
+  create(@Body() createServicePlanDto: CreateServicePlanDto, @Request() req) {
+    return this.servicePlansService.create(createServicePlanDto, req.user);
   }
 
   @Get()
@@ -48,20 +49,20 @@ export class ServicePlansController {
 
   @Patch(':id')
   @Roles('WSP_ADMIN')
-  update(@Param('id') id: string, @Body() updateServicePlanDto: UpdateServicePlanDto) {
-    return this.servicePlansService.update(id, updateServicePlanDto);
+  update(@Param('id') id: string, @Body() updateServicePlanDto: UpdateServicePlanDto, @Request() req) {
+    return this.servicePlansService.update(id, updateServicePlanDto, req.user);
   }
 
   @Patch(':id/activate')
   @Roles('WSP_ADMIN')
-  activate(@Param('id') id: string) {
-    return this.servicePlansService.activate(id);
+  activate(@Param('id') id: string, @Request() req) {
+    return this.servicePlansService.activate(id, req.user);
   }
 
   @Patch(':id/deactivate')
   @Roles('WSP_ADMIN')
-  deactivate(@Param('id') id: string) {
-    return this.servicePlansService.deactivate(id);
+  deactivate(@Param('id') id: string, @Request() req) {
+    return this.servicePlansService.deactivate(id, req.user);
   }
 }
 

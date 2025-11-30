@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  Request,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -27,8 +28,8 @@ export class PosController {
   @Post()
   @Roles('WSP_ADMIN')
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createPosDto: CreatePosDto) {
-    return this.posService.create(createPosDto);
+  create(@Body() createPosDto: CreatePosDto, @Request() req) {
+    return this.posService.create(createPosDto, req.user);
   }
 
   @Get()
@@ -45,26 +46,26 @@ export class PosController {
 
   @Patch(':id')
   @Roles('WSP_ADMIN')
-  update(@Param('id') id: string, @Body() updatePosDto: UpdatePosDto) {
-    return this.posService.update(id, updatePosDto);
+  update(@Param('id') id: string, @Body() updatePosDto: UpdatePosDto, @Request() req) {
+    return this.posService.update(id, updatePosDto, req.user);
   }
 
   @Patch(':id/activate')
   @Roles('WSP_ADMIN')
-  activate(@Param('id') id: string) {
-    return this.posService.activate(id);
+  activate(@Param('id') id: string, @Request() req) {
+    return this.posService.activate(id, req.user);
   }
 
   @Patch(':id/deactivate')
   @Roles('WSP_ADMIN')
-  deactivate(@Param('id') id: string) {
-    return this.posService.deactivate(id);
+  deactivate(@Param('id') id: string, @Request() req) {
+    return this.posService.deactivate(id, req.user);
   }
 
   @Patch(':id/bandwidth')
   @Roles('WSP_ADMIN')
-  updateBandwidth(@Param('id') id: string, @Body() updateBandwidthDto: UpdatePosBandwidthDto) {
-    return this.posService.updateBandwidth(id, updateBandwidthDto);
+  updateBandwidth(@Param('id') id: string, @Body() updateBandwidthDto: UpdatePosBandwidthDto, @Request() req) {
+    return this.posService.updateBandwidth(id, updateBandwidthDto, req.user);
   }
 
   @Get(':id/clients')

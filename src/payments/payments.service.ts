@@ -6,10 +6,15 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
   private async enforcePosScope(invoiceClientPosId: string, currentUser: any, operation: string) {
     if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId !== invoiceClientPosId) {
@@ -98,6 +103,28 @@ export class PaymentsService {
           },
         },
       },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.PAYMENT,
+      entityType: EntityType.PAYMENT,
+      entityId: payment.id,
+      oldValues: null,
+      newValues: {
+        invoiceId: payment.invoiceId,
+        amountPaid: payment.amountPaid,
+        extraAmount: payment.extraAmount,
+        paymentMethod: payment.paymentMethod,
+        paymentReference: payment.paymentReference,
+      },
+      description: `Payment received for invoice ${invoice.invoiceNumber}`,
     });
 
     return payment;

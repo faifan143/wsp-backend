@@ -10,11 +10,15 @@ import { CreateClientDto } from './dto/create-client.dto';
 import { UpdateClientDto } from './dto/update-client.dto';
 import { UpdateConnectionTypeDto } from './dto/update-connection-type.dto';
 import { SuspendClientDto } from './dto/suspend-client.dto';
-import { ConnectionType, ClientStatus, IpStatus } from '@prisma/client';
+import { ConnectionType, ClientStatus, IpStatus, AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
 export class ClientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
   async create(createClientDto: CreateClientDto, currentUser: any) {
     // Validate POS exists
@@ -106,6 +110,28 @@ export class ClientsService {
           clientId: client.id,
           status: IpStatus.ASSIGNED,
           assignedAt: new Date(),
+        },
+      });
+    }
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.CREATE,
+        entityType: EntityType.CLIENT,
+        entityId: client.id,
+        oldValues: null,
+        newValues: {
+          fullName: client.fullName,
+          email: client.email,
+          connectionType: client.connectionType,
+          posId: client.posId,
         },
       });
     }
@@ -214,6 +240,43 @@ export class ClientsService {
       data: updateClientDto,
     });
 
+    // Audit log
+    if (currentUser) {
+      const oldValues: any = {};
+      const newValues: any = {};
+
+      if (updateClientDto.fullName && updateClientDto.fullName !== client.fullName) {
+        oldValues.fullName = client.fullName;
+        newValues.fullName = updateClientDto.fullName;
+      }
+      if (updateClientDto.email && updateClientDto.email !== client.email) {
+        oldValues.email = client.email;
+        newValues.email = updateClientDto.email;
+      }
+      if (updateClientDto.phone && updateClientDto.phone !== client.phone) {
+        oldValues.phone = client.phone;
+        newValues.phone = updateClientDto.phone;
+      }
+      if (updateClientDto.autoRenewEnabled !== undefined) {
+        oldValues.autoRenewEnabled = client.autoRenewEnabled;
+        newValues.autoRenewEnabled = updateClientDto.autoRenewEnabled;
+      }
+
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.CLIENT,
+        entityId: id,
+        oldValues: Object.keys(oldValues).length > 0 ? oldValues : null,
+        newValues: Object.keys(newValues).length > 0 ? newValues : null,
+      });
+    }
+
     return updatedClient;
   }
 
@@ -257,6 +320,22 @@ export class ClientsService {
       },
     });
 
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.REACTIVATE,
+      entityType: EntityType.CLIENT,
+      entityId: id,
+      oldValues: { status: client.status },
+      newValues: { status: ClientStatus.ACTIVE },
+      description: 'Client reactivated',
+    });
+
     return this.findOne(id, currentUser);
   }
 
@@ -297,6 +376,22 @@ export class ClientsService {
         suspendedAt: new Date(),
         suspendedBy: currentUser.id,
       },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.SUSPEND,
+      entityType: EntityType.CLIENT,
+      entityId: id,
+      oldValues: { status: client.status },
+      newValues: { status: ClientStatus.SUSPENDED },
+      description: `Client suspended. Reason: ${suspendClientDto.reason}${suspendClientDto.reasonDetails ? ` - ${suspendClientDto.reasonDetails}` : ''}`,
     });
 
     return this.findOne(id, currentUser);
@@ -350,6 +445,22 @@ export class ClientsService {
         suspendedAt: new Date(),
         suspendedBy: currentUser.id,
       },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.CLIENT,
+      entityId: id,
+      oldValues: { status: client.status },
+      newValues: { status: ClientStatus.TERMINATED },
+      description: 'Terminate client',
     });
 
     return this.findOne(id, currentUser);
@@ -477,6 +588,24 @@ export class ClientsService {
       data: updateData,
     });
 
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.CLIENT,
+        entityId: id,
+        oldValues: { connectionType: client.connectionType },
+        newValues: { connectionType: updateConnectionTypeDto.connectionType },
+        description: 'Change connection type',
+      });
+    }
+
     return this.findOne(id, currentUser);
   }
 
@@ -539,6 +668,24 @@ export class ClientsService {
       },
     });
 
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.STATIC_IP_POOL,
+        entityId: staticIpId,
+        oldValues: { clientId: staticIp.clientId, status: staticIp.status },
+        newValues: { clientId: clientId, status: IpStatus.ASSIGNED },
+        description: `Assign static IP to client ${clientId}`,
+      });
+    }
+
     return this.findOne(clientId, currentUser);
   }
 
@@ -564,15 +711,35 @@ export class ClientsService {
       return this.findOne(clientId, currentUser);
     }
 
+    const staticIpId = client.staticIp.id;
+
     // Release static IP
     await this.prisma.staticIpPool.update({
-      where: { id: client.staticIp.id },
+      where: { id: staticIpId },
       data: {
         clientId: null,
         status: IpStatus.AVAILABLE,
         assignedAt: null,
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.STATIC_IP_POOL,
+        entityId: staticIpId,
+        oldValues: { clientId: clientId, status: client.staticIp.status },
+        newValues: { clientId: null, status: IpStatus.AVAILABLE },
+        description: `Release static IP from client ${clientId}`,
+      });
+    }
 
     return this.findOne(clientId, currentUser);
   }

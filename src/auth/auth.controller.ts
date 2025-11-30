@@ -11,13 +11,18 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Request() req, @Body() loginDto: LoginDto) {
-    return this.authService.login(req.user);
+    const ipAddress = req.ip || req.connection?.remoteAddress || null;
+    const userAgent = req.get('user-agent') || null;
+    return this.authService.login(req.user, ipAddress, userAgent);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout() {
-    return this.authService.logout();
+  async logout(@Request() req) {
+    const ipAddress = req.ip || req.connection?.remoteAddress || null;
+    const userAgent = req.get('user-agent') || null;
+    const userId = req.user?.id || null;
+    return this.authService.logout(userId, ipAddress, userAgent);
   }
 
   @Post('refresh')

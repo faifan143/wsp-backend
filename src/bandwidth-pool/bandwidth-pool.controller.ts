@@ -4,6 +4,7 @@ import {
   Patch,
   Body,
   UseGuards,
+  Request,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -28,8 +29,8 @@ export class BandwidthPoolController {
   @Patch()
   @Roles(UserRole.WSP_ADMIN)
   @HttpCode(HttpStatus.OK)
-  update(@Body() updateBandwidthPoolDto: UpdateBandwidthPoolDto) {
-    return this.bandwidthPoolService.update(updateBandwidthPoolDto);
+  update(@Body() updateBandwidthPoolDto: UpdateBandwidthPoolDto, @Request() req) {
+    return this.bandwidthPoolService.update(updateBandwidthPoolDto, req.user);
   }
 }
 

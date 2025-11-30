@@ -8,13 +8,17 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { CreateStaticIpDto } from './dto/create-static-ip.dto';
 import { UpdateStaticIpDto } from './dto/update-static-ip.dto';
-import { IpStatus } from '@prisma/client';
+import { IpStatus, AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
 export class StaticIpService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
-  async create(createStaticIpDto: CreateStaticIpDto) {
+  async create(createStaticIpDto: CreateStaticIpDto, currentUser?: any) {
     // Validate POS exists
     const pos = await this.prisma.pOS.findUnique({
       where: { id: createStaticIpDto.posId },
@@ -63,6 +67,27 @@ export class StaticIpService {
         },
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.CREATE,
+        entityType: EntityType.STATIC_IP_POOL,
+        entityId: staticIp.id,
+        oldValues: null,
+        newValues: {
+          ipAddress: staticIp.ipAddress,
+          posId: staticIp.posId,
+          status: staticIp.status,
+        },
+      });
+    }
 
     return staticIp;
   }
@@ -142,7 +167,7 @@ export class StaticIpService {
     return staticIp;
   }
 
-  async update(id: string, updateStaticIpDto: UpdateStaticIpDto) {
+  async update(id: string, updateStaticIpDto: UpdateStaticIpDto, currentUser?: any) {
     const staticIp = await this.prisma.staticIpPool.findUnique({
       where: { id },
     });
@@ -173,10 +198,47 @@ export class StaticIpService {
       },
     });
 
+    // Audit log
+    if (currentUser) {
+      const oldValues: any = {};
+      const newValues: any = {};
+
+      if (updateStaticIpDto.subnetMask && updateStaticIpDto.subnetMask !== staticIp.subnetMask) {
+        oldValues.subnetMask = staticIp.subnetMask;
+        newValues.subnetMask = updateStaticIpDto.subnetMask;
+      }
+      if (updateStaticIpDto.gateway && updateStaticIpDto.gateway !== staticIp.gateway) {
+        oldValues.gateway = staticIp.gateway;
+        newValues.gateway = updateStaticIpDto.gateway;
+      }
+      if (updateStaticIpDto.dnsPrimary !== undefined) {
+        oldValues.dnsPrimary = staticIp.dnsPrimary;
+        newValues.dnsPrimary = updateStaticIpDto.dnsPrimary;
+      }
+      if (updateStaticIpDto.dnsSecondary !== undefined) {
+        oldValues.dnsSecondary = staticIp.dnsSecondary;
+        newValues.dnsSecondary = updateStaticIpDto.dnsSecondary;
+      }
+
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.STATIC_IP_POOL,
+        entityId: id,
+        oldValues: Object.keys(oldValues).length > 0 ? oldValues : null,
+        newValues: Object.keys(newValues).length > 0 ? newValues : null,
+      });
+    }
+
     return updatedStaticIp;
   }
 
-  async release(id: string) {
+  async release(id: string, currentUser?: any) {
     const staticIp = await this.prisma.staticIpPool.findUnique({
       where: { id },
       include: {
@@ -224,6 +286,24 @@ export class StaticIpService {
         },
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.STATIC_IP_POOL,
+        entityId: id,
+        oldValues: { clientId: staticIp.clientId, status: staticIp.status },
+        newValues: { clientId: null, status: IpStatus.AVAILABLE },
+        description: 'Release static IP',
+      });
+    }
 
     return releasedStaticIp;
   }

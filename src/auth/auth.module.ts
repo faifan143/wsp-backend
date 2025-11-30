@@ -7,10 +7,12 @@ import { AuthService } from './auth.service';
 import { LocalStrategy } from './local.strategy';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../common/prisma.service';
+import { AuditLogsModule } from '../audit-logs/audit-logs.module';
 
 @Module({
   imports: [
     PassportModule,
+    AuditLogsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

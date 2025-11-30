@@ -7,12 +7,17 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 type InvoiceStatus = 'PAID' | 'UNPAID' | 'OVERDUE';
 
 @Injectable()
 export class InvoicesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
   private calculateInvoiceStatus(invoice: any): InvoiceStatus {
     const totalPaid = invoice.payments.reduce((sum: number, payment: any) => {
@@ -141,6 +146,29 @@ export class InvoicesService {
 
     // Calculate and attach status
     const status = this.calculateInvoiceStatus(invoice);
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.CREATE,
+      entityType: EntityType.INVOICE,
+      entityId: invoice.id,
+      oldValues: null,
+      newValues: {
+        invoiceNumber: invoice.invoiceNumber,
+        clientId: invoice.clientId,
+        subscriptionId: invoice.subscriptionId,
+        amount: invoice.amount,
+        issueDate: invoice.issueDate,
+        dueDate: invoice.dueDate,
+      },
+    });
+
     return { ...invoice, status };
   }
 
@@ -307,6 +335,23 @@ export class InvoicesService {
 
     // Calculate and attach status
     const status = this.calculateInvoiceStatus(cancelledInvoice);
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser.id,
+        userRole: currentUser.role as UserRole,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.INVOICE,
+      entityId: id,
+      oldValues: { notes: invoice.notes },
+      newValues: { notes: cancelledNotes },
+      description: 'Cancel invoice',
+    });
+
     return { ...cancelledInvoice, status };
   }
 }

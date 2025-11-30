@@ -8,13 +8,17 @@ import { PrismaService } from '../common/prisma.service';
 import { CreatePosDto } from './dto/create-pos.dto';
 import { UpdatePosDto } from './dto/update-pos.dto';
 import { UpdatePosBandwidthDto } from './dto/update-pos-bandwidth.dto';
-import { UserRole } from '@prisma/client';
+import { UserRole, AuditAction, EntityType } from '@prisma/client';
+import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
 export class PosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private auditLogger: AuditLoggerService,
+  ) {}
 
-  async create(createPosDto: CreatePosDto) {
+  async create(createPosDto: CreatePosDto, currentUser?: any) {
     // Check for name uniqueness (optional but good practice)
     const existingPos = await this.prisma.pOS.findFirst({
       where: { name: createPosDto.name },
@@ -34,6 +38,27 @@ export class PosService {
         isActive: true,
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.CREATE,
+        entityType: EntityType.POS,
+        entityId: pos.id,
+        oldValues: null,
+        newValues: {
+          name: pos.name,
+          location: pos.location,
+          allocatedBandwidthMbps: pos.allocatedBandwidthMbps,
+        },
+      });
+    }
 
     return pos;
   }
@@ -60,7 +85,7 @@ export class PosService {
     return pos;
   }
 
-  async update(id: string, updatePosDto: UpdatePosDto) {
+  async update(id: string, updatePosDto: UpdatePosDto, currentUser?: any) {
     const existingPos = await this.prisma.pOS.findUnique({
       where: { id },
     });
@@ -88,10 +113,43 @@ export class PosService {
       data: updatePosDto,
     });
 
+    // Audit log
+    if (currentUser) {
+      const oldValues: any = {};
+      const newValues: any = {};
+
+      if (updatePosDto.name && updatePosDto.name !== existingPos.name) {
+        oldValues.name = existingPos.name;
+        newValues.name = updatePosDto.name;
+      }
+      if (updatePosDto.location && updatePosDto.location !== existingPos.location) {
+        oldValues.location = existingPos.location;
+        newValues.location = updatePosDto.location;
+      }
+      if (updatePosDto.contactPhone !== undefined) {
+        oldValues.contactPhone = existingPos.contactPhone;
+        newValues.contactPhone = updatePosDto.contactPhone;
+      }
+
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.POS,
+        entityId: id,
+        oldValues: Object.keys(oldValues).length > 0 ? oldValues : null,
+        newValues: Object.keys(newValues).length > 0 ? newValues : null,
+      });
+    }
+
     return updatedPos;
   }
 
-  async activate(id: string) {
+  async activate(id: string, currentUser?: any) {
     const pos = await this.prisma.pOS.findUnique({
       where: { id },
     });
@@ -105,10 +163,28 @@ export class PosService {
       data: { isActive: true },
     });
 
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.POS,
+        entityId: id,
+        oldValues: { isActive: pos.isActive },
+        newValues: { isActive: true },
+        description: 'Activate POS',
+      });
+    }
+
     return activatedPos;
   }
 
-  async deactivate(id: string) {
+  async deactivate(id: string, currentUser?: any) {
     const pos = await this.prisma.pOS.findUnique({
       where: { id },
     });
@@ -122,10 +198,28 @@ export class PosService {
       data: { isActive: false },
     });
 
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.POS,
+        entityId: id,
+        oldValues: { isActive: pos.isActive },
+        newValues: { isActive: false },
+        description: 'Deactivate POS',
+      });
+    }
+
     return deactivatedPos;
   }
 
-  async updateBandwidth(id: string, updateBandwidthDto: UpdatePosBandwidthDto) {
+  async updateBandwidth(id: string, updateBandwidthDto: UpdatePosBandwidthDto, currentUser?: any) {
     const pos = await this.prisma.pOS.findUnique({
       where: { id },
     });
@@ -147,6 +241,24 @@ export class PosService {
         allocatedBandwidthMbps: updateBandwidthDto.allocatedBandwidthMbps,
       },
     });
+
+    // Audit log
+    if (currentUser) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.UPDATE,
+        entityType: EntityType.POS,
+        entityId: id,
+        oldValues: { allocatedBandwidthMbps: pos.allocatedBandwidthMbps },
+        newValues: { allocatedBandwidthMbps: updateBandwidthDto.allocatedBandwidthMbps },
+        description: 'Update POS bandwidth',
+      });
+    }
 
     return updatedPos;
   }

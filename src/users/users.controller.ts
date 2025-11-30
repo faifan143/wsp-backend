@@ -25,8 +25,8 @@ export class UsersController {
   @Post()
   @Roles('WSP_ADMIN')
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  create(@Body() createUserDto: CreateUserDto, @Request() req) {
+    return this.usersService.create(createUserDto, req.user);
   }
 
   @Get()
@@ -43,20 +43,20 @@ export class UsersController {
 
   @Patch(':id')
   @Roles('WSP_ADMIN')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(id, updateUserDto);
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
+    return this.usersService.update(id, updateUserDto, req.user);
   }
 
   @Patch(':id/activate')
   @Roles('WSP_ADMIN')
-  activate(@Param('id') id: string) {
-    return this.usersService.activate(id);
+  activate(@Param('id') id: string, @Request() req) {
+    return this.usersService.activate(id, req.user);
   }
 
   @Patch(':id/deactivate')
   @Roles('WSP_ADMIN')
   deactivate(@Param('id') id: string, @Request() req) {
-    return this.usersService.deactivate(id, req.user?.id);
+    return this.usersService.deactivate(id, req.user);
   }
 }
 
