@@ -13,6 +13,7 @@ import { InvoicesModule } from './invoices/invoices.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PppoeRequestsModule } from './pppoe-requests/pppoe-requests.module';
 import { BandwidthPoolModule } from './bandwidth-pool/bandwidth-pool.module';
+import { SuspensionHistoryModule } from './suspension-history/suspension-history.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { BandwidthPoolModule } from './bandwidth-pool/bandwidth-pool.module';
     PaymentsModule,
     PppoeRequestsModule,
     BandwidthPoolModule,
+    SuspensionHistoryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
