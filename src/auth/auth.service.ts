@@ -1,16 +1,7 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaService } from '../common/prisma.service';
 import * as bcrypt from 'bcryptjs';
-import { UserRole } from '@prisma/client';
-
-export interface JwtPayload {
-  sub: string;
-  username: string;
-  email: string;
-  role: UserRole;
-  pos_id?: string;
-}
 
 @Injectable()
 export class AuthService {
@@ -22,61 +13,73 @@ export class AuthService {
   async validateUser(username: string, password: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
       where: { username },
-      include: { pos: true }
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        passwordHash: true,
+        role: true,
+        isActive: true,
+        posId: true,
+        clientId: true,
+      },
     });
 
-    if (user && await bcrypt.compare(password, user.passwordHash)) {
-      const { passwordHash, ...result } = user;
-      return result;
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
     }
-    return null;
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('User account is inactive');
+    }
+
+    if (!user.role) {
+      throw new BadRequestException('User role is missing');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Update last login timestamp
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLogin: new Date() },
+    });
+
+    // Return user without password hash
+    const { passwordHash, ...result } = user;
+    return result;
   }
 
   async login(user: any) {
-    const payload: JwtPayload = {
+    const payload = {
       sub: user.id,
       username: user.username,
-      email: user.email,
       role: user.role,
-      pos_id: user.posId,
+      posId: user.posId,
+      clientId: user.clientId,
     };
 
     return {
       access_token: this.jwtService.sign(payload),
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        pos: user.pos,
-      },
     };
   }
 
-  async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, 10);
+  async logout() {
+    // Placeholder for future implementation
+    // Could include token blacklisting, audit logging, etc.
+    return {
+      message: 'Logout successful',
+    };
   }
 
-  async createUser(userData: {
-    username: string;
-    email: string;
-    password: string;
-    role: UserRole;
-    posId?: string;
-    clientId?: string;
-  }) {
-    const hashedPassword = await this.hashPassword(userData.password);
-
-    return this.prisma.user.create({
-      data: {
-        username: userData.username,
-        email: userData.email,
-        passwordHash: hashedPassword,
-        role: userData.role,
-        posId: userData.posId,
-        clientId: userData.clientId,
-      },
-      include: { pos: true }
-    });
+  async refresh() {
+    // Placeholder for refresh token implementation
+    return {
+      message: 'Refresh token endpoint - to be implemented',
+    };
   }
 }
+

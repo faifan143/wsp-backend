@@ -1,22 +1,7 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, UseGuards, Request, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { UserRole } from '@prisma/client';
-
-export class LoginDto {
-  username: string;
-  password: string;
-}
-
-export class RegisterDto {
-  username: string;
-  email: string;
-  password: string;
-  role: UserRole;
-  posId?: string;
-  clientId?: string;
-}
+import { LoginDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -24,20 +9,21 @@ export class AuthController {
 
   @UseGuards(LocalAuthGuard)
   @Post('login')
-  async login(@Request() req) {
+  @HttpCode(HttpStatus.OK)
+  async login(@Request() req, @Body() loginDto: LoginDto) {
     return this.authService.login(req.user);
   }
 
-  @Post('register')
-  async register(@Body() registerDto: RegisterDto) {
-    const user = await this.authService.createUser(registerDto);
-    const { passwordHash, ...result } = user;
-    return result;
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout() {
+    return this.authService.logout();
   }
 
-  @UseGuards(JwtAuthGuard)
-  @Post('profile')
-  getProfile(@Request() req) {
-    return req.user;
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh() {
+    return this.authService.refresh();
   }
 }
+

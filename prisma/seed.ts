@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, UserRole, IpStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -133,7 +133,7 @@ async function main() {
   console.log('✅ Created Service Plans:', servicePlans.count);
 
   // Create Static IP Pool for POS 1
-  const staticIps = [];
+  const staticIps: any[] = [];
   for (let i = 10; i <= 50; i++) {
     staticIps.push({
       posId: pos1.id,
@@ -142,7 +142,7 @@ async function main() {
       gateway: '192.168.1.1',
       dnsPrimary: '8.8.8.8',
       dnsSecondary: '8.8.4.4',
-      status: 'AVAILABLE',
+      status: IpStatus.AVAILABLE,
     });
   }
   await prisma.staticIpPool.createMany({
@@ -151,7 +151,7 @@ async function main() {
   console.log('✅ Created Static IP Pool for POS 1:', staticIps.length, 'IPs');
 
   // Create Static IP Pool for POS 2
-  const staticIps2 = [];
+  const staticIps2: any[] = [];
   for (let i = 10; i <= 30; i++) {
     staticIps2.push({
       posId: pos2.id,
@@ -160,7 +160,7 @@ async function main() {
       gateway: '192.168.2.1',
       dnsPrimary: '8.8.8.8',
       dnsSecondary: '8.8.4.4',
-      status: 'AVAILABLE',
+      status: IpStatus.AVAILABLE,
     });
   }
   await prisma.staticIpPool.createMany({
