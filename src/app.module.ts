@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PosModule } from './pos/pos.module';
 import { ClientsModule } from './clients/clients.module';
+import { StaticIpModule } from './static-ip/static-ip.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { ClientsModule } from './clients/clients.module';
     UsersModule,
     PosModule,
     ClientsModule,
+    StaticIpModule,
   ],
   controllers: [AppController],
   providers: [AppService],
