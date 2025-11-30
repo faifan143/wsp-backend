@@ -9,6 +9,7 @@ import { ClientsModule } from './clients/clients.module';
 import { StaticIpModule } from './static-ip/static-ip.module';
 import { ServicePlansModule } from './service-plans/service-plans.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     StaticIpModule,
     ServicePlansModule,
     SubscriptionsModule,
+    InvoicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
