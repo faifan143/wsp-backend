@@ -4,9 +4,7 @@ This guide will help you set up the Wireless Service Provider Management System 
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
-- [Installation Options](#installation-options)
-  - [Option 1: Using Docker (Recommended)](#option-1-using-docker-recommended)
-  - [Option 2: Native PostgreSQL](#option-2-native-postgresql)
+- [Installation](#installation)
 - [Environment Configuration](#environment-configuration)
 - [Database Setup](#database-setup)
 - [Running the Application](#running-the-application)
@@ -23,68 +21,21 @@ Before you begin, ensure you have the following installed:
 - **Node.js** (v18 or higher) - [Download](https://nodejs.org)
 - **npm** (comes with Node.js) or **yarn**
 - **Git** (for version control)
-- **Code Editor** - VSCode recommended
-
-### Additional Requirements by Installation Method:
-
-**For Docker Installation:**
-- **Docker Desktop** - [Download](https://www.docker.com/products/docker-desktop)
-
-**For Native PostgreSQL Installation:**
 - **PostgreSQL 14+** - [Download](https://www.postgresql.org/download/)
+- **Code Editor** - VSCode recommended
 
 ---
 
-## Installation Options
+## Installation
 
-### Option 1: Using Docker (Recommended)
-
-Docker provides an isolated, consistent environment and is the easiest way to get started.
-
-#### Step 1: Clone the Repository (if not already done)
+### Step 1: Clone the Repository (if not already done)
 
 ```bash
 git clone <repository-url>
 cd wsp-backend
 ```
 
-#### Step 2: Install Node Dependencies
-
-```bash
-npm install
-```
-
-#### Step 3: Start PostgreSQL with Docker
-
-```bash
-# Start PostgreSQL container in detached mode
-docker-compose up -d
-
-# Verify container is running
-docker ps
-```
-
-You should see a container named `wsp-postgres` running.
-
-#### Step 4: Wait for Database Initialization
-
-```bash
-# Wait 10-15 seconds for PostgreSQL to fully initialize
-# Check logs to ensure it's ready
-docker logs wsp-postgres
-```
-
-Look for a message like: `database system is ready to accept connections`
-
-#### Step 5: Continue to [Database Setup](#database-setup)
-
----
-
-### Option 2: Native PostgreSQL
-
-If you prefer not to use Docker or need to run PostgreSQL natively.
-
-#### Step 1: Install PostgreSQL
+### Step 2: Install PostgreSQL
 
 **Windows:**
 1. Download installer from [postgresql.org/download/windows](https://www.postgresql.org/download/windows/)
@@ -116,7 +67,7 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 ```
 
-#### Step 2: Create Database
+### Step 3: Create Database
 
 **Windows (Command Prompt or PowerShell):**
 ```bash
@@ -145,14 +96,13 @@ CREATE DATABASE wsp_automation;
 \q
 ```
 
-#### Step 3: Install Node Dependencies
+### Step 4: Install Node Dependencies
 
 ```bash
-cd wsp-backend
 npm install
 ```
 
-#### Step 4: Continue to [Environment Configuration](#environment-configuration)
+### Step 5: Continue to [Environment Configuration](#environment-configuration)
 
 ---
 
@@ -226,21 +176,77 @@ You should see output like:
 ✔ Applied migration(s)
 ```
 
-### Step 3: Seed the Database (Optional)
+### Step 3: Seed the Database (Recommended for Development)
 
-Add sample data for testing and development:
+The seed script populates the database with comprehensive test data for development and testing:
 
 ```bash
 npm run prisma:seed
 ```
 
-This creates:
-- Sample users (WSP_ADMIN, POS_MANAGER, CLIENT)
-- Sample POS locations
-- Sample service plans
-- Sample clients and subscriptions
+#### What Gets Created
 
-**Note:** You can skip this step if you want to start with a clean database.
+The seed script creates a complete test environment with:
+
+**Users:**
+- **WSP_ADMIN**: `admin` / `admin123` - Full system access
+- **SUB_ADMIN (Finance)**: `finance_admin` / `finance123` - Finance capabilities (invoices, payments)
+- **SUB_ADMIN (Operations)**: `operations_admin` / `operations123` - Operations capabilities (clients, subscriptions)
+- **SUB_ADMIN (Read-Only)**: `readonly_admin` / `readonly123` - Read-only access to all resources
+- **POS_MANAGER**: `pos_manager_1` / `manager123` - Manages POS location 1
+- **CLIENT**: `client_ahmed` / `client123` - Regular client user
+
+**Infrastructure:**
+- 3 POS locations with allocated bandwidth
+- Bandwidth pool with total capacity
+- Multiple service plans (POSTPAID and PREPAID)
+- Static IP pool with available and assigned IPs
+
+**Business Data:**
+- Multiple clients with different connection types (DYNAMIC, STATIC, PPPOE)
+- Active subscriptions linked to clients and service plans
+- Invoices (paid, unpaid, overdue)
+- Payment records
+- PPPoE change requests (various statuses)
+- Suspension history records
+- Usage logs for subscriptions
+
+#### Default Test Credentials
+
+After seeding, you can use these credentials to test the API:
+
+| Role | Username | Password | Capabilities |
+|------|----------|----------|--------------|
+| WSP Admin | `admin` | `admin123` | All capabilities |
+| Finance Admin | `finance_admin` | `finance123` | INVOICES_*, PAYMENTS_* |
+| Operations Admin | `operations_admin` | `operations123` | CLIENTS_*, SUBSCRIPTIONS_* |
+| Read-Only Admin | `readonly_admin` | `readonly123` | All READ capabilities |
+| POS Manager | `pos_manager_1` | `manager123` | POS-scoped access |
+| Client | `client_ahmed` | `client123` | Read-only own data |
+
+**⚠️ Security Note:** These are default test credentials. **NEVER use these in production!** Always change passwords and create new users for production environments.
+
+#### Seed Script Features
+
+- **Automatic cleanup**: Clears existing data before seeding
+- **Foreign key aware**: Deletes data in correct order to respect constraints
+- **Comprehensive coverage**: Creates data for all major entities and relationships
+- **Realistic scenarios**: Includes various statuses, connection types, and business states
+
+#### Re-seeding the Database
+
+If you need to reset and re-seed:
+
+```bash
+# Option 1: Reset migrations and re-seed (WARNING: Deletes all data)
+npm run prisma:migrate reset
+# This will automatically run the seed script after reset
+
+# Option 2: Manual re-seed (if data structure hasn't changed)
+npm run prisma:seed
+```
+
+**Note:** The seed script automatically clears existing data before creating new records, so you can safely run it multiple times.
 
 ---
 
@@ -307,15 +313,20 @@ Try accessing the API documentation (if Swagger is configured) or test a simple 
 curl http://localhost:3000/auth/login
 ```
 
-### 4. Check PostgreSQL Service
+### 4. Test Authentication
 
-**Docker:**
+After seeding, test login with default credentials:
+
 ```bash
-docker ps
-# Should show wsp-postgres container running
+# Test admin login
+curl -X POST http://localhost:3000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
 ```
 
-**Native PostgreSQL:**
+You should receive a JWT access token in the response.
+
+### 5. Check PostgreSQL Service
 
 **Windows:**
 ```bash
@@ -358,14 +369,7 @@ lsof -ti:3000 | xargs kill -9
 **Solution:**
 
 1. **Check PostgreSQL is running:**
-   ```bash
-   # Docker
-   docker ps
-   docker logs wsp-postgres
-
-   # Native
-   # Check service status (see Verification section)
-   ```
+   - Check service status (see Verification section)
 
 2. **Verify DATABASE_URL in .env:**
    - Check username, password, host, port, database name
@@ -395,23 +399,6 @@ npm run prisma:migrate reset
 # Or manually reset
 psql -U postgres -d wsp_automation -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 npm run prisma:migrate
-```
-
-### Problem: Docker container won't start
-
-**Solution:**
-```bash
-# Stop all containers
-docker-compose down
-
-# Remove volumes (WARNING: Deletes database data)
-docker-compose down -v
-
-# Restart
-docker-compose up -d
-
-# Check logs
-docker logs wsp-postgres
 ```
 
 ### Problem: "Module not found" errors
@@ -468,14 +455,17 @@ npm run build
 # Production mode
 npm run start:prod
 
-# Run tests
+# Run unit tests
 npm run test
 
-# Run e2e tests
+# Run e2e tests (requires database and server running)
 npm run test:e2e
 
 # Run tests with coverage
 npm run test:cov
+
+# Run tests in watch mode
+npm run test:watch
 
 # Lint code
 npm run lint
@@ -484,28 +474,164 @@ npm run lint
 npm run format
 ```
 
-### Docker Commands
+---
+
+## Testing
+
+The project includes comprehensive end-to-end (e2e) tests that verify all API endpoints and business logic.
+
+### Prerequisites for Testing
+
+Before running tests, ensure:
+
+1. **Database is set up and migrated:**
+   ```bash
+   npm run prisma:generate
+   npm run prisma:migrate
+   ```
+
+2. **Server is NOT running** (tests start their own instance)
+
+3. **Test database is available** (tests use the same database as development)
+
+### Running E2E Tests
 
 ```bash
-# Start containers
-docker-compose up -d
-
-# Stop containers
-docker-compose down
-
-# View logs
-docker logs wsp-postgres
-docker logs -f wsp-postgres  # Follow logs
-
-# Restart containers
-docker-compose restart
-
-# Remove containers and volumes
-docker-compose down -v
-
-# Access PostgreSQL shell
-docker exec -it wsp-postgres psql -U postgres -d wsp_automation
+# Run all e2e tests
+npm run test:e2e
 ```
+
+This will:
+- Start the NestJS application
+- Run all test suites
+- Clean up test data after each test
+- Shut down the application
+
+### Test Coverage
+
+The e2e tests cover:
+
+1. **Authentication (`auth.e2e-spec.ts`)**
+   - Login with valid/invalid credentials
+   - Logout functionality
+   - Token refresh
+
+2. **Users (`capabilities.e2e-spec.ts`)**
+   - User creation with different roles
+   - Capability assignment for SUB_ADMIN
+   - User activation/deactivation
+
+3. **Clients (`clients.e2e-spec.ts`)**
+   - Client CRUD operations
+   - Connection type management (DYNAMIC, STATIC, PPPOE)
+   - Client suspension and activation
+   - Static IP assignment/release
+
+4. **Subscriptions (`subscriptions.e2e-spec.ts`)**
+   - Subscription creation
+   - Renewal and upgrade
+   - Termination
+   - Usage log creation
+
+5. **Invoices & Payments (`invoices-payments.e2e-spec.ts`)**
+   - Invoice creation and cancellation
+   - Payment processing (full, partial, with extra amount)
+   - Invoice status calculation
+
+6. **Other Flows (`other-flows.e2e-spec.ts`)**
+   - Service plan management
+   - PPPoE request workflow (create, approve, reject, complete)
+   - POS management
+
+7. **Scope Restrictions (`scope-restrictions.e2e-spec.ts`)**
+   - POS_MANAGER access limitations
+   - CLIENT access restrictions
+   - Capability-based access control
+
+### Test Structure
+
+Tests are organized in `test/e2e/` directory:
+
+```
+test/
+├── e2e/
+│   ├── auth.e2e-spec.ts
+│   ├── capabilities.e2e-spec.ts
+│   ├── clients.e2e-spec.ts
+│   ├── invoices-payments.e2e-spec.ts
+│   ├── other-flows.e2e-spec.ts
+│   ├── scope-restrictions.e2e-spec.ts
+│   └── subscriptions.e2e-spec.ts
+├── utils/
+│   ├── test-helpers.ts      # Helper functions for tests
+│   └── test-setup.ts        # Test configuration
+└── jest-e2e.json           # Jest e2e configuration
+```
+
+### Test Helpers
+
+The `TestHelpers` class provides utilities for:
+
+- **Database cleanup**: `cleanDatabase()` - Removes all test data
+- **Authentication**: `login()` - Get access tokens for test users
+- **User creation**: `createWspAdmin()`, `createSubAdmin()`, etc.
+- **Resource creation**: `createPos()`, `createClient()`, `createServicePlan()`, etc.
+
+### Running Specific Test Suites
+
+```bash
+# Run only authentication tests
+npm run test:e2e -- auth.e2e-spec
+
+# Run only client tests
+npm run test:e2e -- clients.e2e-spec
+
+# Run tests matching a pattern
+npm run test:e2e -- --testNamePattern="should create client"
+```
+
+### Test Database
+
+**Important:** E2E tests use the same database as development. Tests automatically clean up data after each test suite, but:
+
+- Tests run in sequence (not parallel) to avoid conflicts
+- Each test suite cleans up its own data
+- The database should be seeded before running tests for consistent results
+
+### Debugging Tests
+
+```bash
+# Run tests in debug mode
+npm run test:debug
+
+# Run with verbose output
+npm run test:e2e -- --verbose
+
+# Run a single test file
+npm run test:e2e -- clients.e2e-spec.ts
+```
+
+### Test Best Practices
+
+1. **Always seed before testing** to ensure consistent test data
+2. **Don't run tests while server is running** - tests start their own instance
+3. **Check test output** for detailed error messages
+4. **Review test helpers** in `test/utils/test-helpers.ts` for reusable functions
+
+### Troubleshooting Tests
+
+**Problem: "Cannot connect to database"**
+- Ensure database is running and accessible
+- Check DATABASE_URL in environment
+- Run migrations: `npm run prisma:migrate`
+
+**Problem: "Port 3000 already in use"**
+- Stop any running development server
+- Tests need to start their own server instance
+
+**Problem: "Test data conflicts"**
+- Run `npm run prisma:seed` to reset test data
+- Or manually clean database: `npm run prisma:migrate reset`
 
 ---
 
@@ -518,9 +644,14 @@ After successful installation:
    - [SYSTEM_DESCRIPTION_AND_SCENARIOS.md](docs/SYSTEM_DESCRIPTION_AND_SCENARIOS.md) - Business logic
 
 2. **Explore the API:**
-   - Use Postman or similar tool
-   - Test authentication endpoints
-   - Create sample data
+   - Import the Postman collection: `postman/WSP_Backend_API_Complete.postman_collection.json`
+   - Test authentication endpoints with seeded credentials
+   - Explore all 80+ endpoints organized by module
+
+3. **Run Tests:**
+   - Execute e2e tests: `npm run test:e2e`
+   - Verify all endpoints work correctly
+   - Check test coverage: `npm run test:cov`
 
 3. **Connect Frontend:**
    - Update CORS_ORIGIN in .env if needed
@@ -554,7 +685,7 @@ If you encounter issues not covered in this guide:
 
 1. Check the [GitHub Issues](https://github.com/your-repo/wsp-backend/issues)
 2. Review error logs in console
-3. Check Docker/PostgreSQL logs
+3. Check PostgreSQL logs
 4. Consult the official documentation:
    - [NestJS Documentation](https://docs.nestjs.com)
    - [Prisma Documentation](https://www.prisma.io/docs)
@@ -584,14 +715,36 @@ npx prisma studio
 
 ### Default Credentials (after seeding)
 
-Check your seed script at `prisma/seed.ts` for default user credentials.
+After running `npm run prisma:seed`, you can use these credentials:
 
-**Common defaults:**
-- Admin: `admin@wsp.com` / `admin123`
-- POS Manager: `manager@pos.com` / `manager123`
-- Client: `client@example.com` / `client123`
+| Role | Username | Password | Email |
+|------|----------|----------|-------|
+| WSP Admin | `admin` | `admin123` | admin@wsp.com |
+| Finance Admin | `finance_admin` | `finance123` | finance@wsp.com |
+| Operations Admin | `operations_admin` | `operations123` | operations@wsp.com |
+| Read-Only Admin | `readonly_admin` | `readonly123` | readonly@wsp.com |
+| POS Manager | `pos_manager_1` | `manager123` | pos_manager_1@wsp.com |
+| Client | `client_ahmed` | `client123` | ahmed@client.com |
 
-**⚠️ Important:** Change these in production!
+**⚠️ Important:** These are test credentials only. **NEVER use these in production!** Always create new users with strong passwords for production environments.
+
+### Postman Collection
+
+A complete Postman collection is available at:
+- `postman/WSP_Backend_API_Complete.postman_collection.json`
+
+This collection includes:
+- All 80+ API endpoints
+- Organized by 13 modules
+- Pre-configured authentication
+- Example request bodies
+- Environment variables setup
+
+**To use:**
+1. Import the collection into Postman
+2. Set `base_url` environment variable to `http://localhost:3000`
+3. Use the Login request to get an access token
+4. Token is automatically saved to `access_token` environment variable
 
 ---
 
