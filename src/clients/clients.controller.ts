@@ -9,6 +9,7 @@ import {
   Request,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { ClientsService } from './clients.service';
 import { CreateClientDto } from './dto/create-client.dto';
@@ -35,13 +36,24 @@ export class ClientsController {
   create(@Body() createClientDto: CreateClientDto, @Request() req) {
     return this.clientsService.create(createClientDto, req.user);
   }
-
+  
   @Get()
   @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
   @Capabilities(Capability.CLIENTS_READ)
-  findAll(@Request() req) {
-    return this.clientsService.findAll(req.user);
+  async findAll(
+    @Request() req,
+    @Query('page') pageRaw?: string,
+    @Query('limit') limitRaw?: string,
+  ) {
+    const page = Math.max(parseInt(pageRaw ?? '1', 10), 1);
+    const limit = Math.min(Math.max(parseInt(limitRaw ?? '50', 10), 1), 100);
+    return this.clientsService.findAll({
+      page,
+      limit,
+      user: req.user,
+    });
   }
+
 
   @Get(':id')
   @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)

@@ -73,9 +73,10 @@ export class InvoicesService {
       throw new NotFoundException(`Client with ID ${createInvoiceDto.clientId} not found`);
     }
 
-    // Enforce RBAC - only WSP_ADMIN can create
-    if (currentUser.role !== 'WSP_ADMIN') {
-      throw new ForbiddenException('Only WSP_ADMIN can create invoices');
+    // Enforce RBAC - WSP_ADMIN or SUB_ADMIN with INVOICES_CREATE capability
+    // Capability check is done by the guard, but we also check here for service-level validation
+    if (currentUser.role !== 'WSP_ADMIN' && currentUser.role !== 'SUB_ADMIN') {
+      throw new ForbiddenException('Only WSP_ADMIN or SUB_ADMIN can create invoices');
     }
 
     // Validate subscription if provided
@@ -279,9 +280,10 @@ export class InvoicesService {
   }
 
   async cancel(id: string, currentUser: any) {
-    // Only WSP_ADMIN can cancel
-    if (currentUser.role !== 'WSP_ADMIN') {
-      throw new ForbiddenException('Only WSP_ADMIN can cancel invoices');
+    // WSP_ADMIN or SUB_ADMIN with INVOICES_CANCEL capability can cancel
+    // Capability check is done by the guard, but we also check here for service-level validation
+    if (currentUser.role !== 'WSP_ADMIN' && currentUser.role !== 'SUB_ADMIN') {
+      throw new ForbiddenException('Only WSP_ADMIN or SUB_ADMIN can cancel invoices');
     }
 
     const invoice = await this.prisma.invoice.findUnique({

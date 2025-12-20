@@ -46,7 +46,37 @@ export class CapabilitiesGuard implements CanActivate {
       return true;
     }
 
-    // For other roles (POS_MANAGER, CLIENT), capabilities guard doesn't apply
+    // For POS_MANAGER, they have implicit capabilities based on their role
+    // POS scope enforcement happens at the service level
+    // However, for certain operations (like payments), they need explicit capabilities
+    if (user.role === 'POS_MANAGER') {
+      // Check if this is a payment-related capability that requires explicit permission
+      const paymentCapabilities = [
+        Capability.PAYMENTS_CREATE,
+        Capability.PAYMENTS_READ,
+      ];
+      const requiresExplicitCapability = requiredCapabilities.some((cap) =>
+        paymentCapabilities.includes(cap),
+      );
+
+      if (requiresExplicitCapability) {
+        // For payment operations, POS_MANAGER needs explicit capability
+        const userCapabilities = user.capabilities || [];
+        const hasAllCapabilities = requiredCapabilities.every((cap) =>
+          userCapabilities.includes(cap),
+        );
+
+        if (!hasAllCapabilities) {
+          throw new ForbiddenException(
+            `Missing required capabilities: ${requiredCapabilities.join(', ')}`,
+          );
+        }
+      }
+      // For other operations, POS_MANAGER has implicit access (POS scope enforced at service level)
+      return true;
+    }
+
+    // For CLIENT and other roles, capabilities guard doesn't apply
     // They are handled by RolesGuard
     return true;
   }

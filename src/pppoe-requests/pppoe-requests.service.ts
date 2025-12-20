@@ -278,6 +278,21 @@ export class PppoeRequestsService {
       );
     }
 
+    // Update client PPPoE credentials if newUsername or newPassword provided
+    if (pppoeRequest.newUsername || pppoeRequest.newPassword) {
+      const updateData: any = {};
+      if (pppoeRequest.newUsername) {
+        updateData.pppoeUsername = pppoeRequest.newUsername;
+      }
+      if (pppoeRequest.newPassword) {
+        updateData.pppoePassword = pppoeRequest.newPassword;
+      }
+      await this.prisma.client.update({
+        where: { id: pppoeRequest.clientId },
+        data: updateData,
+      });
+    }
+
     // Update request
     const approvedRequest = await this.prisma.pppoeChangeRequest.update({
       where: { id },
@@ -428,7 +443,11 @@ export class PppoeRequestsService {
       description: `Reject PPPoE change. Reason: ${rejectPppoeRequestDto.rejectionReason}`,
     });
 
-    return rejectedRequest;
+    // Add rejectionReason to response for convenience
+    return {
+      ...rejectedRequest,
+      rejectionReason: rejectPppoeRequestDto.rejectionReason,
+    };
   }
 
   async complete(id: string, completePppoeRequestDto: CompletePppoeRequestDto, currentUser: any) {

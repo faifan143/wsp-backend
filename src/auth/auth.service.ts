@@ -46,8 +46,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Update last login timestamp
-    await this.prisma.user.update({
+    // Update last login timestamp (use updateMany to avoid error if user doesn't exist)
+    await this.prisma.user.updateMany({
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });

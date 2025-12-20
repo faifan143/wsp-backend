@@ -139,40 +139,30 @@ export class ClientsService {
     return client;
   }
 
-  async findAll(currentUser?: any) {
-    let whereClause: any = {};
-
-    // POS_MANAGER can only see clients from their POS
-    if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId) {
-      whereClause.posId = currentUser.posId;
+  async findAll(query: any, currentUser?: any) {
+    // Handle both old signature (query, currentUser) and new signature (query with user property)
+    const user = currentUser || query.user;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+  
+    const where: any = {};
+  
+    if (user?.role === 'POS_MANAGER' && user?.posId) {
+      where.posId = user.posId;
     }
-
-    const clients = await this.prisma.client.findMany({
-      where: whereClause,
+  
+    return this.prisma.client.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
       include: {
-        pos: {
-          select: {
-            id: true,
-            name: true,
-            location: true,
-          },
-        },
-        staticIp: {
-          select: {
-            id: true,
-            ipAddress: true,
-            status: true,
-          },
-        },
+        pos: { select: { id: true, name: true, location: true } },
+        staticIp: { select: { id: true, ipAddress: true, status: true } },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
-
-    return clients;
   }
-
+  
   async findOne(id: string, currentUser?: any) {
     const client = await this.prisma.client.findUnique({
       where: { id },
@@ -687,7 +677,12 @@ export class ClientsService {
       });
     }
 
-    return this.findOne(clientId, currentUser);
+    const updatedClient = await this.findOne(clientId, currentUser);
+    // Add staticIpId for convenience
+    return {
+      ...updatedClient,
+      staticIpId: staticIpId,
+    };
   }
 
   async releaseStaticIp(clientId: string, currentUser?: any) {
