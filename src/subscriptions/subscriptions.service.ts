@@ -11,6 +11,7 @@ import { UpgradeSubscriptionDto } from './dto/upgrade-subscription.dto';
 import { CreateUsageLogDto } from './dto/create-usage-log.dto';
 import { SubscriptionStatus, ClientStatus, AuditAction, EntityType, UserRole } from '@prisma/client';
 import { AuditLoggerService } from '../audit-logs/audit-logger.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class SubscriptionsService {
@@ -20,7 +21,8 @@ export class SubscriptionsService {
   ) {}
 
   private getManagerScope(currentUser: any): { posId?: string } | null {
-    if (currentUser?.role === 'WSP_ADMIN') {
+    // WSP_ADMIN and SUB_ADMIN have full access (no POS restriction)
+    if (currentUser?.role === 'WSP_ADMIN' || currentUser?.role === 'SUB_ADMIN') {
       return null; // No restriction
     }
     if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId) {
@@ -34,12 +36,182 @@ export class SubscriptionsService {
     currentUser: any,
     operation: string,
   ) {
+    // WSP_ADMIN and SUB_ADMIN have full access (checked by capabilities)
+    if (currentUser?.role === 'WSP_ADMIN' || currentUser?.role === 'SUB_ADMIN') {
+      return; // No restriction
+    }
     const scope = this.getManagerScope(currentUser);
     if (scope && scope.posId !== clientPosId) {
       throw new ForbiddenException(
         `You can only ${operation} subscriptions for clients in your POS`,
       );
     }
+  }
+
+  /**
+   * Calculate total data usage (in GB) for the current subscription period
+   */
+  private async calculateCurrentPeriodUsage(subscriptionId: string): Promise<number> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      select: {
+        startDate: true,
+        endDate: true,
+      },
+    });
+
+    if (!subscription) {
+      return 0;
+    }
+
+    // Aggregate usage logs for the current period
+    const usageLogs = await this.prisma.usageLog.findMany({
+      where: {
+        subscriptionId,
+        logDate: {
+          gte: subscription.startDate,
+          lte: subscription.endDate,
+        },
+      },
+      select: {
+        downloadMb: true,
+        uploadMb: true,
+      },
+    });
+
+    // Sum all usage logs for the current period
+    const totalUsageMb = usageLogs.reduce((sum, log) => {
+      return sum + log.downloadMb.toNumber() + log.uploadMb.toNumber();
+    }, 0);
+
+    // Convert MB to GB (1 GB = 1024 MB)
+    return totalUsageMb / 1024;
+  }
+
+  /**
+   * Check if subscription has exceeded data capacity and apply throttling if needed
+   */
+  private async checkAndApplyThrottling(subscriptionId: string): Promise<boolean> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        plan: true,
+      },
+    });
+
+    if (!subscription || subscription.status !== SubscriptionStatus.ACTIVE) {
+      return false;
+    }
+
+    // Only apply throttling if plan has a data capacity limit
+    if (!subscription.plan.dataCapacityGb) {
+      return false;
+    }
+
+    // Calculate current period usage
+    const totalUsageGb = await this.calculateCurrentPeriodUsage(subscriptionId);
+    const capacityLimitGb = subscription.plan.dataCapacityGb;
+
+    // Check if capacity is exceeded
+    if (totalUsageGb <= capacityLimitGb) {
+      return false;
+    }
+
+    // Determine original bandwidth
+    // If originalBandwidthMbps is set, use it; otherwise use current bandwidth as original
+    const originalBandwidth = subscription.originalBandwidthMbps || subscription.bandwidthAllocatedMbps;
+    const originalBandwidthNum = originalBandwidth.toNumber();
+    const currentBandwidthNum = subscription.bandwidthAllocatedMbps.toNumber();
+
+    // Check if already throttled (current bandwidth is less than original)
+    if (currentBandwidthNum < originalBandwidthNum) {
+      return false; // Already throttled, no action needed
+    }
+
+    // Calculate throttled speed (25% of original)
+    const throttledSpeed = new Decimal(originalBandwidthNum * 0.25);
+
+    // Apply throttling - store original bandwidth if not already stored
+    await this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: {
+        bandwidthAllocatedMbps: throttledSpeed,
+        originalBandwidthMbps: subscription.originalBandwidthMbps || subscription.bandwidthAllocatedMbps,
+      },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: null, // System action
+        userRole: UserRole.WSP_ADMIN, // System role
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.SUBSCRIPTION,
+      entityId: subscriptionId,
+      oldValues: {
+        bandwidthAllocatedMbps: originalBandwidth.toNumber(),
+      },
+      newValues: {
+        bandwidthAllocatedMbps: throttledSpeed.toNumber(),
+      },
+      description: `Bandwidth throttled to 25% due to data capacity exceeded (${totalUsageGb.toFixed(2)} GB / ${capacityLimitGb} GB)`,
+    });
+
+    return true;
+  }
+
+  /**
+   * Restore bandwidth to original value
+   */
+  private async restoreBandwidth(subscriptionId: string, reason: string, currentUser?: any): Promise<boolean> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+    });
+
+    if (!subscription || !subscription.originalBandwidthMbps) {
+      return false; // No original bandwidth stored, nothing to restore
+    }
+
+    // Check if already at original bandwidth
+    if (subscription.bandwidthAllocatedMbps.toNumber() >= subscription.originalBandwidthMbps.toNumber()) {
+      return false; // Already restored
+    }
+
+    const originalBandwidth = subscription.originalBandwidthMbps;
+
+    // Restore bandwidth and clear original (since it's restored)
+    await this.prisma.subscription.update({
+      where: { id: subscriptionId },
+      data: {
+        bandwidthAllocatedMbps: originalBandwidth,
+        originalBandwidthMbps: null, // Clear original since bandwidth is restored
+      },
+    });
+
+    // Audit log
+    await this.auditLogger.log({
+      context: {
+        userId: currentUser?.id || undefined,
+        userRole: (currentUser?.role as UserRole) || UserRole.WSP_ADMIN,
+        ipAddress: null,
+        userAgent: null,
+      },
+      action: AuditAction.UPDATE,
+      entityType: EntityType.SUBSCRIPTION,
+      entityId: subscriptionId,
+      oldValues: {
+        bandwidthAllocatedMbps: subscription.bandwidthAllocatedMbps.toNumber(),
+      },
+      newValues: {
+        bandwidthAllocatedMbps: originalBandwidth.toNumber(),
+      },
+      description: `Bandwidth restored to original. Reason: ${reason}`,
+    });
+
+    return true;
   }
 
   async create(createSubscriptionDto: CreateSubscriptionDto, currentUser: any) {
@@ -106,6 +278,7 @@ export class SubscriptionsService {
         endDate,
         status: SubscriptionStatus.ACTIVE,
         bandwidthAllocatedMbps: servicePlan.downloadSpeedMbps,
+        originalBandwidthMbps: servicePlan.downloadSpeedMbps, // Store original bandwidth
         isAutoRenewed: createSubscriptionDto.isAutoRenewed ?? false,
       },
       include: {
@@ -332,7 +505,8 @@ export class SubscriptionsService {
       throw new BadRequestException('Client already has another active subscription');
     }
 
-    // Update subscription
+    // Update subscription - reset bandwidth on renewal (new period starts)
+    // This restores bandwidth if it was throttled and resets the original bandwidth
     const renewedSubscription = await this.prisma.subscription.update({
       where: { id },
       data: {
@@ -340,6 +514,8 @@ export class SubscriptionsService {
         endDate: newEndDate,
         status: SubscriptionStatus.ACTIVE,
         isAutoRenewed: renewSubscriptionDto.isAutoRenewed ?? subscription.isAutoRenewed,
+        bandwidthAllocatedMbps: subscription.plan.downloadSpeedMbps, // Restore to plan's original speed
+        originalBandwidthMbps: subscription.plan.downloadSpeedMbps, // Reset original bandwidth for new period
       },
       include: {
         client: {
@@ -458,6 +634,7 @@ export class SubscriptionsService {
         endDate: newEndDate,
         status: SubscriptionStatus.ACTIVE,
         bandwidthAllocatedMbps: newPlan.downloadSpeedMbps,
+        originalBandwidthMbps: newPlan.downloadSpeedMbps, // Store original bandwidth for new plan
         isAutoRenewed: false,
         upgradedToSubscriptionId: null,
       },
@@ -566,6 +743,9 @@ export class SubscriptionsService {
         logDate: usageLog.logDate,
       },
     });
+
+    // Check and apply throttling if data capacity exceeded
+    await this.checkAndApplyThrottling(subscriptionId);
 
     return usageLog;
   }

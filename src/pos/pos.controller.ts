@@ -19,76 +19,90 @@ import { AssignManagerDto } from './dto/assign-manager.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../users/guards/roles.guard';
 import { Roles } from '../users/decorators/roles.decorator';
+import { CapabilitiesGuard } from '../common/guards/capabilities.guard';
+import { Capabilities } from '../common/decorators/capabilities.decorator';
+import { Capability, UserRole } from '@prisma/client';
 
 @Controller('pos')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilitiesGuard)
 export class PosController {
   constructor(private readonly posService: PosService) {}
 
   @Post()
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createPosDto: CreatePosDto, @Request() req) {
     return this.posService.create(createPosDto, req.user);
   }
 
   @Get()
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_READ)
   findAll() {
     return this.posService.findAll();
   }
 
   @Get(':id')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_READ)
   findOne(@Param('id') id: string) {
     return this.posService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_UPDATE)
   update(@Param('id') id: string, @Body() updatePosDto: UpdatePosDto, @Request() req) {
     return this.posService.update(id, updatePosDto, req.user);
   }
 
   @Patch(':id/activate')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_UPDATE)
   activate(@Param('id') id: string, @Request() req) {
     return this.posService.activate(id, req.user);
   }
 
   @Patch(':id/deactivate')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_UPDATE)
   deactivate(@Param('id') id: string, @Request() req) {
     return this.posService.deactivate(id, req.user);
   }
 
   @Patch(':id/bandwidth')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_UPDATE)
   updateBandwidth(@Param('id') id: string, @Body() updateBandwidthDto: UpdatePosBandwidthDto, @Request() req) {
     return this.posService.updateBandwidth(id, updateBandwidthDto, req.user);
   }
 
   @Get(':id/clients')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_READ)
   getClients(@Param('id') id: string) {
     return this.posService.getClients(id);
   }
 
   @Get(':id/managers')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_READ)
   getManagers(@Param('id') id: string) {
     return this.posService.getManagers(id);
   }
 
   @Post(':id/managers')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_UPDATE)
   @HttpCode(HttpStatus.OK)
   assignManager(@Param('id') id: string, @Body() assignManagerDto: AssignManagerDto) {
     return this.posService.assignManager(id, assignManagerDto.userId);
   }
 
   @Delete(':id/managers/:userId')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.POS_UPDATE)
   @HttpCode(HttpStatus.OK)
   removeManager(@Param('id') id: string, @Param('userId') userId: string) {
     return this.posService.removeManager(id, userId);

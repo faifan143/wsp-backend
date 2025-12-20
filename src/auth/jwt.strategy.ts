@@ -25,6 +25,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         username: true,
         email: true,
         role: true,
+        capabilities: true,
         isActive: true,
         posId: true,
         clientId: true,

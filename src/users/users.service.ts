@@ -8,8 +8,9 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { UserRole, AuditAction, EntityType } from '@prisma/client';
+import { UserRole, AuditAction, EntityType, Capability } from '@prisma/client';
 import { AuditLoggerService } from '../audit-logs/audit-logger.service';
+import { PermissionsUtil } from '../common/utils/permissions.util';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -20,6 +21,20 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto, currentUser?: any) {
+    // Check if current user can create this role
+    if (currentUser?.role === 'SUB_ADMIN') {
+      if (createUserDto.role === 'WSP_ADMIN' || createUserDto.role === 'SUB_ADMIN') {
+        throw new ForbiddenException('SUB_ADMIN cannot create WSP_ADMIN or SUB_ADMIN users');
+      }
+    }
+
+    // Validate SUB_ADMIN must have capabilities
+    if (createUserDto.role === 'SUB_ADMIN') {
+      if (!createUserDto.capabilities || createUserDto.capabilities.length === 0) {
+        throw new BadRequestException('SUB_ADMIN must have at least one capability');
+      }
+    }
+
     // Validate username uniqueness
     const existingUsername = await this.prisma.user.findUnique({
       where: { username: createUserDto.username },
@@ -80,9 +95,15 @@ export class UsersService {
       }
       userData.clientId = createUserDto.clientId;
       userData.posId = null;
-    } else if (createUserDto.role === UserRole.WSP_ADMIN) {
+    } else if (createUserDto.role === UserRole.WSP_ADMIN || createUserDto.role === UserRole.SUB_ADMIN) {
       userData.posId = null;
       userData.clientId = null;
+      // Set capabilities for SUB_ADMIN
+      if (createUserDto.role === UserRole.SUB_ADMIN) {
+        userData.capabilities = {
+          set: createUserDto.capabilities || [],
+        };
+      }
     }
 
     const user = await this.prisma.user.create({
@@ -92,6 +113,7 @@ export class UsersService {
         username: true,
         email: true,
         role: true,
+        capabilities: true,
         posId: true,
         clientId: true,
         isActive: true,
@@ -118,6 +140,7 @@ export class UsersService {
           username: user.username,
           email: user.email,
           role: user.role,
+          capabilities: user.capabilities,
           posId: user.posId,
           clientId: user.clientId,
           isActive: user.isActive,
@@ -135,6 +158,7 @@ export class UsersService {
         username: true,
         email: true,
         role: true,
+        capabilities: true,
         posId: true,
         clientId: true,
         isActive: true,
@@ -158,6 +182,7 @@ export class UsersService {
         username: true,
         email: true,
         role: true,
+        capabilities: true,
         posId: true,
         clientId: true,
         isActive: true,
@@ -183,6 +208,35 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
+    // Check if current user can manage target user
+    if (currentUser && !PermissionsUtil.canManageUser(currentUser, existingUser.role)) {
+      throw new ForbiddenException('You cannot manage this user');
+    }
+
+    // Determine role for validation (use existing role if not being updated)
+    const role = updateUserDto.role || existingUser.role;
+
+    // Check if trying to promote to restricted role
+    if (currentUser?.role === 'SUB_ADMIN') {
+      if (role === 'WSP_ADMIN' || role === 'SUB_ADMIN') {
+        throw new ForbiddenException('SUB_ADMIN cannot change user role to WSP_ADMIN or SUB_ADMIN');
+      }
+    }
+
+    // Validate SUB_ADMIN must have capabilities if role is SUB_ADMIN
+    if (role === 'SUB_ADMIN') {
+      if (updateUserDto.capabilities && updateUserDto.capabilities.length === 0) {
+        throw new BadRequestException('SUB_ADMIN must have at least one capability');
+      }
+      // If updating to SUB_ADMIN and no capabilities provided, use existing capabilities
+      if (!updateUserDto.capabilities && existingUser.role !== 'SUB_ADMIN') {
+        throw new BadRequestException('SUB_ADMIN must have at least one capability');
+      }
+    }
+
+    const posId = updateUserDto.posId !== undefined ? updateUserDto.posId : existingUser.posId;
+    const clientId = updateUserDto.clientId !== undefined ? updateUserDto.clientId : existingUser.clientId;
+
     // Validate email uniqueness if email is being updated
     if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
       const existingEmail = await this.prisma.user.findUnique({
@@ -192,11 +246,6 @@ export class UsersService {
         throw new ConflictException('Email already exists');
       }
     }
-
-    // Determine role for validation (use existing role if not being updated)
-    const role = updateUserDto.role || existingUser.role;
-    const posId = updateUserDto.posId !== undefined ? updateUserDto.posId : existingUser.posId;
-    const clientId = updateUserDto.clientId !== undefined ? updateUserDto.clientId : existingUser.clientId;
 
     // Validate role constraints
     this.validateRoleConstraints(role, posId, clientId);
@@ -215,6 +264,13 @@ export class UsersService {
 
     if (updateUserDto.role) {
       updateData.role = updateUserDto.role;
+    }
+
+    // Handle capabilities for SUB_ADMIN
+    if (role === UserRole.SUB_ADMIN && updateUserDto.capabilities !== undefined) {
+      updateData.capabilities = {
+        set: updateUserDto.capabilities,
+      };
     }
 
     // Handle posId and clientId based on role
@@ -253,7 +309,7 @@ export class UsersService {
       }
       updateData.clientId = clientId;
       updateData.posId = null;
-    } else if (role === UserRole.WSP_ADMIN) {
+    } else if (role === UserRole.WSP_ADMIN || role === UserRole.SUB_ADMIN) {
       updateData.posId = null;
       updateData.clientId = null;
     }
@@ -266,6 +322,7 @@ export class UsersService {
         username: true,
         email: true,
         role: true,
+        capabilities: true,
         posId: true,
         clientId: true,
         isActive: true,
@@ -287,6 +344,10 @@ export class UsersService {
       if (updateUserDto.role && updateUserDto.role !== existingUser.role) {
         oldValues.role = existingUser.role;
         newValues.role = updateUserDto.role;
+      }
+      if (updateUserDto.capabilities !== undefined) {
+        oldValues.capabilities = existingUser.capabilities;
+        newValues.capabilities = updateUserDto.capabilities;
       }
       if (updateUserDto.password) {
         newValues.passwordChanged = true;
@@ -418,9 +479,9 @@ export class UsersService {
   }
 
   private validateRoleConstraints(role: UserRole, posId?: string | null, clientId?: string | null) {
-    if (role === UserRole.WSP_ADMIN) {
+    if (role === UserRole.WSP_ADMIN || role === UserRole.SUB_ADMIN) {
       if (posId || clientId) {
-        throw new BadRequestException('WSP_ADMIN cannot have posId or clientId');
+        throw new BadRequestException(`${role} cannot have posId or clientId`);
       }
     } else if (role === UserRole.POS_MANAGER) {
       if (!posId) {

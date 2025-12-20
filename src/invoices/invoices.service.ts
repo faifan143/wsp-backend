@@ -49,6 +49,10 @@ export class InvoicesService {
   }
 
   private async enforcePosScope(clientPosId: string, currentUser: any, operation: string) {
+    // WSP_ADMIN and SUB_ADMIN have full access (checked by capabilities)
+    if (currentUser?.role === 'WSP_ADMIN' || currentUser?.role === 'SUB_ADMIN') {
+      return; // No restriction
+    }
     if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId !== clientPosId) {
       throw new ForbiddenException(
         `You can only ${operation} invoices for clients in your POS`,
@@ -184,17 +188,18 @@ export class InvoicesService {
       whereClause.subscriptionId = query.subscriptionId;
     }
 
-    // POS_MANAGER scope
+    // POS_MANAGER scope - restrict to their POS
     if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId) {
       whereClause.client = {
         posId: currentUser.posId,
       };
     } else if (query.posId) {
-      // WSP_ADMIN can filter by POS
+      // WSP_ADMIN and SUB_ADMIN can filter by POS
       whereClause.client = {
         posId: query.posId,
       };
     }
+    // WSP_ADMIN and SUB_ADMIN have full access if no posId filter
 
     // Fetch invoices
     const invoices = await this.prisma.invoice.findMany({

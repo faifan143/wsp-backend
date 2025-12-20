@@ -61,8 +61,8 @@ export class AuditLogsService {
     }
 
     // RBAC filtering
-    if (currentUser.role === UserRole.WSP_ADMIN) {
-      // WSP_ADMIN: can filter by anything, including posId
+    if (currentUser.role === UserRole.WSP_ADMIN || currentUser.role === UserRole.SUB_ADMIN) {
+      // WSP_ADMIN and SUB_ADMIN: can filter by anything, including posId
       if (query.posId) {
         // Get all client IDs for this POS
         const clientsInPos = await this.prisma.client.findMany({

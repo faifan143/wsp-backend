@@ -19,47 +19,55 @@ import { CreateUsageLogDto } from './dto/create-usage-log.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../users/guards/roles.guard';
 import { Roles } from '../users/decorators/roles.decorator';
-import { SubscriptionStatus } from '@prisma/client';
+import { CapabilitiesGuard } from '../common/guards/capabilities.guard';
+import { Capabilities } from '../common/decorators/capabilities.decorator';
+import { SubscriptionStatus, Capability, UserRole } from '@prisma/client';
 
 @Controller('subscriptions')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilitiesGuard)
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
   @Post()
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.SUBSCRIPTIONS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createSubscriptionDto: CreateSubscriptionDto, @Request() req) {
     return this.subscriptionsService.create(createSubscriptionDto, req.user);
   }
 
   @Get()
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.SUBSCRIPTIONS_READ)
   findAll(@Query() query: any, @Request() req) {
     return this.subscriptionsService.findAll(query, req.user);
   }
 
   @Get(':id')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.SUBSCRIPTIONS_READ)
   findOne(@Param('id') id: string, @Request() req) {
     return this.subscriptionsService.findOne(id, req.user);
   }
 
   @Patch(':id/terminate')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.SUBSCRIPTIONS_TERMINATE)
   terminate(@Param('id') id: string, @Request() req) {
     return this.subscriptionsService.terminate(id, req.user);
   }
 
   @Post(':id/renew')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.SUBSCRIPTIONS_RENEW)
   @HttpCode(HttpStatus.OK)
   renew(@Param('id') id: string, @Body() renewSubscriptionDto: RenewSubscriptionDto, @Request() req) {
     return this.subscriptionsService.renew(id, renewSubscriptionDto, req.user);
   }
 
   @Post(':id/upgrade')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.SUBSCRIPTIONS_UPGRADE)
   @HttpCode(HttpStatus.OK)
   upgrade(
     @Param('id') id: string,
@@ -70,7 +78,8 @@ export class SubscriptionsController {
   }
 
   @Post(':id/usage-log')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.USAGE_LOGS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   createUsageLog(
     @Param('id') id: string,
@@ -81,7 +90,8 @@ export class SubscriptionsController {
   }
 
   @Get(':id/usage-log')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.USAGE_LOGS_READ)
   getUsageLogs(@Param('id') id: string, @Request() req) {
     return this.subscriptionsService.getUsageLogs(id, req.user);
   }

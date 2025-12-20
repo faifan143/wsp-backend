@@ -3,7 +3,7 @@ import { PrismaService } from '../common/prisma.service';
 import { AuditAction, EntityType, UserRole } from '@prisma/client';
 
 export interface AuditContext {
-  userId: string;
+  userId: string | null; // null for system actions
   userRole: UserRole;
   ipAddress?: string | null;
   userAgent?: string | null;
@@ -36,6 +36,11 @@ export class AuditLoggerService {
     const { userId, userRole, ipAddress, userAgent } = context;
 
     // Fail-safe: never throw from logger, so it doesn't break main flow
+    // Skip logging if userId is null (system actions)
+    if (!userId) {
+      return;
+    }
+
     try {
       await this.prisma.auditLog.create({
         data: {

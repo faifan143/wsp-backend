@@ -22,6 +22,7 @@ export class AuthService {
         email: true,
         passwordHash: true,
         role: true,
+        capabilities: true,
         isActive: true,
         posId: true,
         clientId: true,
@@ -61,6 +62,7 @@ export class AuthService {
       sub: user.id,
       username: user.username,
       role: user.role,
+      capabilities: user.capabilities || [],
       posId: user.posId,
       clientId: user.clientId,
     };

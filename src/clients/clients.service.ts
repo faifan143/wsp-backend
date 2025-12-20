@@ -203,6 +203,7 @@ export class ClientsService {
     }
 
     // POS_MANAGER can only access clients from their POS
+    // WSP_ADMIN and SUB_ADMIN have full access (checked by capabilities)
     if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId !== client.posId) {
       throw new ForbiddenException('You can only access clients from your own POS');
     }

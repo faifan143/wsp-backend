@@ -53,8 +53,78 @@ enum PaymentMethod {
 
 enum UserRole {
   WSP_ADMIN
+  SUB_ADMIN
   POS_MANAGER
   CLIENT
+}
+
+enum Capability {
+  // POS Management
+  POS_CREATE
+  POS_READ
+  POS_UPDATE
+  POS_DELETE
+  
+  // Client Management
+  CLIENTS_CREATE
+  CLIENTS_READ
+  CLIENTS_UPDATE
+  CLIENTS_ACTIVATE
+  CLIENTS_SUSPEND
+  CLIENTS_TERMINATE
+  CLIENTS_CONNECTION_TYPE_UPDATE
+  CLIENTS_STATIC_IP_ASSIGN
+  CLIENTS_STATIC_IP_RELEASE
+  
+  // Subscription Management
+  SUBSCRIPTIONS_CREATE
+  SUBSCRIPTIONS_READ
+  SUBSCRIPTIONS_UPDATE
+  SUBSCRIPTIONS_TERMINATE
+  SUBSCRIPTIONS_RENEW
+  SUBSCRIPTIONS_UPGRADE
+  USAGE_LOGS_CREATE
+  USAGE_LOGS_READ
+  
+  // Financial Management
+  INVOICES_CREATE
+  INVOICES_READ
+  INVOICES_CANCEL
+  PAYMENTS_CREATE
+  PAYMENTS_READ
+  
+  // Service Plan Management
+  SERVICE_PLANS_CREATE
+  SERVICE_PLANS_READ
+  SERVICE_PLANS_UPDATE
+  SERVICE_PLANS_DELETE
+  
+  // Static IP Management
+  STATIC_IP_CREATE
+  STATIC_IP_READ
+  STATIC_IP_UPDATE
+  STATIC_IP_DELETE
+  
+  // Bandwidth Pool Management
+  BANDWIDTH_POOL_READ
+  BANDWIDTH_POOL_UPDATE
+  
+  // User Management
+  USERS_CREATE
+  USERS_READ
+  USERS_UPDATE
+  USERS_ACTIVATE
+  USERS_DEACTIVATE
+  
+  // PPPoE Requests
+  PPPOE_REQUESTS_CREATE
+  PPPOE_REQUESTS_READ
+  PPPOE_REQUESTS_APPROVE
+  PPPOE_REQUESTS_REJECT
+  
+  // Audit & Reports
+  AUDIT_LOGS_READ
+  SUSPENSION_HISTORY_READ
 }
 
 enum IpStatus {
@@ -106,17 +176,18 @@ enum EntityType {
 }
 
 model User {
-  id           String    @id @default(uuid()) @db.Uuid
-  username     String    @unique
-  email        String    @unique
-  passwordHash String    @map("password_hash")
+  id           String      @id @default(uuid()) @db.Uuid
+  username     String      @unique
+  email        String      @unique
+  passwordHash String      @map("password_hash")
   role         UserRole
-  posId        String?   @map("pos_id") @db.Uuid
-  clientId     String?   @unique @map("client_id") @db.Uuid
-  isActive     Boolean   @default(true) @map("is_active")
-  lastLogin    DateTime? @map("last_login")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  capabilities Capability[] @default([])
+  posId        String?     @map("pos_id") @db.Uuid
+  clientId     String?     @unique @map("client_id") @db.Uuid
+  isActive     Boolean     @default(true) @map("is_active")
+  lastLogin    DateTime?   @map("last_login")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
 
   pos                    POS?                 @relation(fields: [posId], references: [id])
   client                 Client?              @relation(fields: [clientId], references: [id])
@@ -231,6 +302,7 @@ model Subscription {
   status                 SubscriptionStatus @default(ACTIVE)
   isAutoRenewed          Boolean            @default(false) @map("is_auto_renewed")
   bandwidthAllocatedMbps Decimal            @map("bandwidth_allocated_mbps") @db.Decimal(10, 2)
+  originalBandwidthMbps  Decimal?           @map("original_bandwidth_mbps") @db.Decimal(10, 2)
 
   upgradedToSubscriptionId String?  @unique @map("upgraded_to_subscription_id") @db.Uuid
   createdAt                DateTime @default(now()) @map("created_at")

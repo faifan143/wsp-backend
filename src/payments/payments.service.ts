@@ -17,6 +17,11 @@ export class PaymentsService {
   ) {}
 
   private async enforcePosScope(invoiceClientPosId: string, currentUser: any, operation: string) {
+    // WSP_ADMIN and SUB_ADMIN have full access (checked by capabilities)
+    if (currentUser?.role === 'WSP_ADMIN' || currentUser?.role === 'SUB_ADMIN') {
+      return; // No restriction
+    }
+
     if (currentUser?.role === 'POS_MANAGER' && currentUser?.posId !== invoiceClientPosId) {
       throw new ForbiddenException(
         `You can only ${operation} payments for invoices of clients in your POS`,
@@ -150,12 +155,12 @@ export class PaymentsService {
         },
       };
     } else if (query.clientId) {
-      // WSP_ADMIN can filter by client
+      // WSP_ADMIN and SUB_ADMIN can filter by client
       whereClause.invoice = {
         clientId: query.clientId,
       };
     } else if (query.posId) {
-      // WSP_ADMIN can filter by POS
+      // WSP_ADMIN and SUB_ADMIN can filter by POS
       whereClause.invoice = {
         client: {
           posId: query.posId,

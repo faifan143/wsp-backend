@@ -54,8 +54,8 @@ export class SuspensionHistoryService {
     } else if (currentUser.role === UserRole.CLIENT) {
       // CLIENT: only see their own history
       whereClause.clientId = currentUser.clientId;
-    } else if (currentUser.role === UserRole.WSP_ADMIN) {
-      // WSP_ADMIN: can see all, but can optionally filter by POS
+    } else if (currentUser.role === UserRole.WSP_ADMIN || currentUser.role === UserRole.SUB_ADMIN) {
+      // WSP_ADMIN and SUB_ADMIN: can see all, but can optionally filter by POS
       if (query.posId) {
         whereClause.client = {
           posId: query.posId,

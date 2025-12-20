@@ -19,34 +19,40 @@ import { CompletePppoeRequestDto } from './dto/complete-pppoe-request.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../users/guards/roles.guard';
 import { Roles } from '../users/decorators/roles.decorator';
-import { RequestStatus } from '@prisma/client';
+import { CapabilitiesGuard } from '../common/guards/capabilities.guard';
+import { Capabilities } from '../common/decorators/capabilities.decorator';
+import { RequestStatus, Capability, UserRole } from '@prisma/client';
 
 @Controller('pppoe-requests')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilitiesGuard)
 export class PppoeRequestsController {
   constructor(private readonly pppoeRequestsService: PppoeRequestsService) {}
 
   @Post()
-  @Roles('WSP_ADMIN', 'POS_MANAGER', 'CLIENT')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER, UserRole.CLIENT)
+  @Capabilities(Capability.PPPOE_REQUESTS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createPppoeRequestDto: CreatePppoeRequestDto, @Request() req) {
     return this.pppoeRequestsService.create(createPppoeRequestDto, req.user);
   }
 
   @Get()
-  @Roles('WSP_ADMIN', 'POS_MANAGER', 'CLIENT')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER, UserRole.CLIENT)
+  @Capabilities(Capability.PPPOE_REQUESTS_READ)
   findAll(@Query() query: any, @Request() req) {
     return this.pppoeRequestsService.findAll(query, req.user);
   }
 
   @Get(':id')
-  @Roles('WSP_ADMIN', 'POS_MANAGER', 'CLIENT')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER, UserRole.CLIENT)
+  @Capabilities(Capability.PPPOE_REQUESTS_READ)
   findOne(@Param('id') id: string, @Request() req) {
     return this.pppoeRequestsService.findOne(id, req.user);
   }
 
   @Patch(':id/approve')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.PPPOE_REQUESTS_APPROVE)
   approve(
     @Param('id') id: string,
     @Body() approvePppoeRequestDto: ApprovePppoeRequestDto,
@@ -56,7 +62,8 @@ export class PppoeRequestsController {
   }
 
   @Patch(':id/reject')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.PPPOE_REQUESTS_REJECT)
   reject(
     @Param('id') id: string,
     @Body() rejectPppoeRequestDto: RejectPppoeRequestDto,
@@ -66,7 +73,8 @@ export class PppoeRequestsController {
   }
 
   @Patch(':id/complete')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.PPPOE_REQUESTS_APPROVE)
   complete(
     @Param('id') id: string,
     @Body() completePppoeRequestDto: CompletePppoeRequestDto,

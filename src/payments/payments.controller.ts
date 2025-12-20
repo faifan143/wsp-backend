@@ -15,28 +15,33 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../users/guards/roles.guard';
 import { Roles } from '../users/decorators/roles.decorator';
-import { PaymentMethod } from '@prisma/client';
+import { CapabilitiesGuard } from '../common/guards/capabilities.guard';
+import { Capabilities } from '../common/decorators/capabilities.decorator';
+import { PaymentMethod, Capability, UserRole } from '@prisma/client';
 
 @Controller('payments')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilitiesGuard)
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post()
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.PAYMENTS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createPaymentDto: CreatePaymentDto, @Request() req) {
     return this.paymentsService.create(createPaymentDto, req.user);
   }
 
   @Get()
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.PAYMENTS_READ)
   findAll(@Query() query: any, @Request() req) {
     return this.paymentsService.findAll(query, req.user);
   }
 
   @Get(':id')
-  @Roles('WSP_ADMIN', 'POS_MANAGER')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.PAYMENTS_READ)
   findOne(@Param('id') id: string, @Request() req) {
     return this.paymentsService.findOne(id, req.user);
   }

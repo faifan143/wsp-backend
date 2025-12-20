@@ -16,45 +16,54 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { Roles } from './decorators/roles.decorator';
+import { CapabilitiesGuard } from '../common/guards/capabilities.guard';
+import { Capabilities } from '../common/decorators/capabilities.decorator';
+import { Capability, UserRole } from '@prisma/client';
 
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, CapabilitiesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.USERS_CREATE)
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
     return this.usersService.create(createUserDto, req.user);
   }
 
   @Get()
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.USERS_READ)
   findAll() {
     return this.usersService.findAll();
   }
 
   @Get(':id')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.USERS_READ)
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.USERS_UPDATE)
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
     return this.usersService.update(id, updateUserDto, req.user);
   }
 
   @Patch(':id/activate')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.USERS_ACTIVATE)
   activate(@Param('id') id: string, @Request() req) {
     return this.usersService.activate(id, req.user);
   }
 
   @Patch(':id/deactivate')
-  @Roles('WSP_ADMIN')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN)
+  @Capabilities(Capability.USERS_DEACTIVATE)
   deactivate(@Param('id') id: string, @Request() req) {
     return this.usersService.deactivate(id, req.user);
   }
