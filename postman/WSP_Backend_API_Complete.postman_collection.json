@@ -1,0 +1,3232 @@
+{
+	"info": {
+		"_postman_id": "wsp-backend-master-001",
+		"name": "WSP Backend API - Complete Collection",
+		"description": "Complete API collection for WSP Backend covering all endpoints: Authentication, Users, POS, Clients, Service Plans, Subscriptions, Invoices, Payments, Static IP, PPPoE Requests, Suspension History, Audit Logs, and Bandwidth Pool management.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "01. Authentication",
+			"description": "Authentication endpoints for login, logout, and token refresh",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set('access_token', jsonData.access_token);",
+									"    pm.test('Login successful', function () {",
+									"        pm.expect(jsonData).to.have.property('access_token');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticate user and receive access token. Store token in environment variable for subsequent requests."
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.environment.unset('access_token');",
+									"    pm.test('Logout successful', function () {",
+									"        pm.response.to.have.status(200);",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Logout current user and invalidate session"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"refresh"
+							]
+						},
+						"description": "Refresh access token (if refresh token mechanism is implemented)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "02. Users Management",
+			"description": "User management endpoints - Create, read, update, activate/deactivate users. Requires WSP_ADMIN or SUB_ADMIN role with appropriate capabilities.",
+			"item": [
+				{
+					"name": "Create User - WSP_ADMIN",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"new_user\",\n  \"email\": \"new_user@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"role\": \"POS_MANAGER\",\n  \"posId\": \"{{pos_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							]
+						},
+						"description": "Create a new user. For SUB_ADMIN role, capabilities array is required."
+					},
+					"response": []
+				},
+				{
+					"name": "Create User - SUB_ADMIN with Capabilities",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"finance_admin\",\n  \"email\": \"finance@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"role\": \"SUB_ADMIN\",\n  \"capabilities\": [\n    \"INVOICES_CREATE\",\n    \"INVOICES_READ\",\n    \"INVOICES_CANCEL\",\n    \"PAYMENTS_CREATE\",\n    \"PAYMENTS_READ\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							]
+						},
+						"description": "Create a SUB_ADMIN user with specific capabilities. SUB_ADMIN must have at least one capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users"
+							]
+						},
+						"description": "Get all users. Requires USERS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{user_id}}",
+									"description": "User UUID"
+								}
+							]
+						},
+						"description": "Get a specific user by ID. Requires USERS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Update User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"updated_email@example.com\",\n  \"capabilities\": [\n    \"CLIENTS_READ\",\n    \"CLIENTS_CREATE\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/users/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{user_id}}",
+									"description": "User UUID"
+								}
+							]
+						},
+						"description": "Update user information. Requires USERS_UPDATE capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Activate User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/:id/activate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								":id",
+								"activate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{user_id}}",
+									"description": "User UUID"
+								}
+							]
+						},
+						"description": "Activate a user account. Requires USERS_ACTIVATE capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate User",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/:id/deactivate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"users",
+								":id",
+								"deactivate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{user_id}}",
+									"description": "User UUID"
+								}
+							]
+						},
+						"description": "Deactivate a user account. Requires USERS_DEACTIVATE capability."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "03. POS Management",
+			"description": "Point of Sale (POS) location management - Create, read, update, activate/deactivate POS locations, manage bandwidth, and assign managers.",
+			"item": [
+				{
+					"name": "Create POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Downtown Branch\",\n  \"location\": \"123 Main Street, Downtown\",\n  \"contactPhone\": \"+1234567890\",\n  \"allocatedBandwidthMbps\": 1000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos"
+							]
+						},
+						"description": "Create a new POS location. Requires POS_CREATE capability. Allocated bandwidth must not exceed available bandwidth pool."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos"
+							]
+						},
+						"description": "Get all POS locations. Requires POS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Get POS by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Get a specific POS location by ID. Requires POS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Update POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Downtown Branch - Updated\",\n  \"location\": \"123 Main Street, Downtown, Suite 200\",\n  \"contactPhone\": \"+1234567891\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pos/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Update POS location information. Requires POS_UPDATE capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Activate POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos/:id/activate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"activate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Activate a POS location. Requires POS_UPDATE capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos/:id/deactivate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"deactivate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Deactivate a POS location. Requires POS_UPDATE capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Update POS Bandwidth",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"allocatedBandwidthMbps\": 1500\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pos/:id/bandwidth",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"bandwidth"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Update allocated bandwidth for a POS location. Requires POS_UPDATE capability. Total allocated bandwidth across all POS must not exceed bandwidth pool."
+					},
+					"response": []
+				},
+				{
+					"name": "Get POS Clients",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos/:id/clients",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"clients"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Get all clients associated with a POS location. Requires POS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Get POS Managers",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos/:id/managers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"managers"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Get all managers (POS_MANAGER users) assigned to a POS location. Requires POS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Manager to POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userId\": \"{{user_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pos/:id/managers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"managers"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								}
+							]
+						},
+						"description": "Assign a POS_MANAGER user to a POS location. Requires POS_UPDATE capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Manager from POS",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pos/:id/managers/:userId",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pos",
+								":id",
+								"managers",
+								":userId"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pos_id}}",
+									"description": "POS UUID"
+								},
+								{
+									"key": "userId",
+									"value": "{{user_id}}",
+									"description": "User UUID"
+								}
+							]
+						},
+						"description": "Remove a manager from a POS location. Requires POS_UPDATE capability."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "04. Clients Management",
+			"description": "Client management endpoints - Create, read, update, activate, suspend, terminate clients. Manage connection types and static IP assignments.",
+			"item": [
+				{
+					"name": "Create Client - DYNAMIC",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"posId\": \"{{pos_id}}\",\n  \"fullName\": \"John Doe\",\n  \"phone\": \"+1234567890\",\n  \"email\": \"john.doe@example.com\",\n  \"address\": \"123 Main Street, City, State 12345\",\n  \"nationalId\": \"123456789\",\n  \"connectionType\": \"DYNAMIC\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients"
+							]
+						},
+						"description": "Create a new client with DYNAMIC connection type. Requires CLIENTS_CREATE capability. POS_MANAGER can only create clients for their own POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Client - STATIC",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"posId\": \"{{pos_id}}\",\n  \"fullName\": \"Jane Smith\",\n  \"phone\": \"+1234567891\",\n  \"email\": \"jane.smith@example.com\",\n  \"address\": \"456 Oak Avenue, City, State 12346\",\n  \"connectionType\": \"STATIC\",\n  \"staticIpId\": \"{{static_ip_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients"
+							]
+						},
+						"description": "Create a new client with STATIC connection type. staticIpId is required and must be an available IP from the same POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Client - PPPOE",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"posId\": \"{{pos_id}}\",\n  \"fullName\": \"Bob Johnson\",\n  \"phone\": \"+1234567892\",\n  \"email\": \"bob.johnson@example.com\",\n  \"address\": \"789 Pine Road, City, State 12347\",\n  \"connectionType\": \"PPPOE\",\n  \"pppoeUsername\": \"bob_pppoe\",\n  \"pppoePassword\": \"SecurePPPoEPass123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients"
+							]
+						},
+						"description": "Create a new client with PPPOE connection type. pppoeUsername and pppoePassword are required and username must be unique."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Clients",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/clients?page=1&limit=50",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Items per page (default: 50, max: 100)"
+								}
+							]
+						},
+						"description": "Get all clients with pagination. Requires CLIENTS_READ capability. POS_MANAGER only sees clients from their POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Client by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/clients/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Get a specific client by ID. Requires CLIENTS_READ capability. POS_MANAGER can only access clients from their POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fullName\": \"John Doe Updated\",\n  \"phone\": \"+1234567899\",\n  \"email\": \"john.doe.updated@example.com\",\n  \"address\": \"123 Main Street Updated, City, State 12345\",\n  \"autoRenewEnabled\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Update client information. Requires CLIENTS_UPDATE capability. POS_MANAGER can only update clients from their POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Activate Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/clients/:id/activate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"activate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Activate a suspended client. Requires CLIENTS_ACTIVATE capability. Cannot activate terminated clients."
+					},
+					"response": []
+				},
+				{
+					"name": "Suspend Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reason\": \"NON_PAYMENT\",\n  \"reasonDetails\": \"Payment overdue for 3 months\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients/:id/suspend",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"suspend"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Suspend a client. Requires CLIENTS_SUSPEND capability. Reason must be one of: NON_PAYMENT, VIOLATION, MAINTENANCE, OTHER. reasonDetails is optional."
+					},
+					"response": []
+				},
+				{
+					"name": "Terminate Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/clients/:id/terminate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"terminate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Terminate a client. Requires CLIENTS_TERMINATE capability. Automatically releases any assigned static IP."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Connection Type to STATIC",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"connectionType\": \"STATIC\",\n  \"staticIpId\": \"{{static_ip_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients/:id/connection-type",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"connection-type"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Update client connection type to STATIC. Requires CLIENTS_CONNECTION_TYPE_UPDATE capability. staticIpId is required and must be available from the same POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Connection Type to PPPOE",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"connectionType\": \"PPPOE\",\n  \"pppoeUsername\": \"new_pppoe_user\",\n  \"pppoePassword\": \"NewSecurePass123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients/:id/connection-type",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"connection-type"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Update client connection type to PPPOE. Requires CLIENTS_CONNECTION_TYPE_UPDATE capability. pppoeUsername and pppoePassword are required."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Connection Type to DYNAMIC",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"connectionType\": \"DYNAMIC\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients/:id/connection-type",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"connection-type"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Update client connection type to DYNAMIC. Requires CLIENTS_CONNECTION_TYPE_UPDATE capability. Automatically releases static IP if assigned."
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Static IP to Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"staticIpId\": \"{{static_ip_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/clients/:id/static-ip/assign",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"static-ip",
+								"assign"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Assign a static IP to a client. Requires CLIENTS_STATIC_IP_ASSIGN capability. Client must have STATIC connection type. Static IP must be available and from the same POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Release Static IP from Client",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/clients/:id/static-ip/release",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"clients",
+								":id",
+								"static-ip",
+								"release"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{client_id}}",
+									"description": "Client UUID"
+								}
+							]
+						},
+						"description": "Release static IP from a client. Requires CLIENTS_STATIC_IP_RELEASE capability. Makes the IP available for reassignment."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "05. Service Plans Management",
+			"description": "Service plan management - Create, read, update service plans. Activate/deactivate plans. Service plans define bandwidth, cost, and duration for subscriptions.",
+			"item": [
+				{
+					"name": "Create Service Plan - POSTPAID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"planName\": \"Premium Plan\",\n  \"description\": \"High-speed internet plan for power users\",\n  \"serviceType\": \"POSTPAID\",\n  \"durationType\": \"MONTHLY\",\n  \"durationDays\": 30,\n  \"cost\": 100.00,\n  \"downloadSpeedMbps\": 200,\n  \"uploadSpeedMbps\": 100,\n  \"dataCapacityGb\": 2000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/service-plans",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans"
+							]
+						},
+						"description": "Create a new service plan. Requires SERVICE_PLANS_CREATE capability. Plan name must be unique. Service types: POSTPAID, PREPAID. Duration types: HALF_MONTHLY, MONTHLY, QUARTERLY, HALF_ANNUAL, ANNUAL."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Service Plan - PREPAID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"planName\": \"Basic Prepaid Plan\",\n  \"description\": \"Affordable prepaid internet plan\",\n  \"serviceType\": \"PREPAID\",\n  \"durationType\": \"MONTHLY\",\n  \"durationDays\": 30,\n  \"cost\": 50.00,\n  \"downloadSpeedMbps\": 50,\n  \"uploadSpeedMbps\": 25,\n  \"dataCapacityGb\": 500\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/service-plans",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans"
+							]
+						},
+						"description": "Create a PREPAID service plan. dataCapacityGb is typically required for prepaid plans."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Service Plans",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/service-plans?isActive=true&serviceType=POSTPAID",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans"
+							],
+							"query": [
+								{
+									"key": "isActive",
+									"value": "true",
+									"description": "Filter by active status (true/false)",
+									"disabled": true
+								},
+								{
+									"key": "serviceType",
+									"value": "POSTPAID",
+									"description": "Filter by service type (POSTPAID/PREPAID)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all service plans with optional filters. Requires SERVICE_PLANS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Service Plan by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/service-plans/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{service_plan_id}}",
+									"description": "Service Plan UUID"
+								}
+							]
+						},
+						"description": "Get a specific service plan by ID. Requires SERVICE_PLANS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Service Plan",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"planName\": \"Premium Plan Updated\",\n  \"description\": \"Updated description\",\n  \"cost\": 120.00,\n  \"downloadSpeedMbps\": 250,\n  \"uploadSpeedMbps\": 125\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/service-plans/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{service_plan_id}}",
+									"description": "Service Plan UUID"
+								}
+							]
+						},
+						"description": "Update service plan information. Requires SERVICE_PLANS_UPDATE capability. Plan name must be unique if changed."
+					},
+					"response": []
+				},
+				{
+					"name": "Activate Service Plan",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"isActive\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/service-plans/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{service_plan_id}}",
+									"description": "Service Plan UUID"
+								}
+							]
+						},
+						"description": "Activate a service plan. Requires SERVICE_PLANS_UPDATE capability. Only active plans can be assigned to new subscriptions."
+					},
+					"response": []
+				},
+				{
+					"name": "Deactivate Service Plan",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"isActive\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/service-plans/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"service-plans",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{service_plan_id}}",
+									"description": "Service Plan UUID"
+								}
+							]
+						},
+						"description": "Deactivate a service plan. Requires SERVICE_PLANS_UPDATE capability. Deactivated plans cannot be assigned to new subscriptions."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "06. Subscriptions Management",
+			"description": "Subscription management - Create, read, renew, upgrade, terminate subscriptions. Manage usage logs and throttling.",
+			"item": [
+				{
+					"name": "Create Subscription",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"planId\": \"{{service_plan_id}}\",\n  \"startDate\": \"2024-01-01T00:00:00.000Z\",\n  \"isAutoRenewed\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/subscriptions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions"
+							]
+						},
+						"description": "Create a new subscription for a client. Requires SUBSCRIPTIONS_CREATE capability. Client must be ACTIVE and not terminated. Client cannot have another active subscription. startDate is optional (defaults to now). End date is calculated from startDate + plan durationDays."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Subscriptions",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/subscriptions?status=ACTIVE&clientId={{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "ACTIVE",
+									"description": "Filter by status (ACTIVE/EXPIRED/TERMINATED)",
+									"disabled": true
+								},
+								{
+									"key": "clientId",
+									"value": "{{client_id}}",
+									"description": "Filter by client ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all subscriptions with optional filters. Requires SUBSCRIPTIONS_READ capability. POS_MANAGER only sees subscriptions from their POS clients."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Subscription by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/subscriptions/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{subscription_id}}",
+									"description": "Subscription UUID"
+								}
+							]
+						},
+						"description": "Get a specific subscription by ID. Requires SUBSCRIPTIONS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Renew Subscription",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"renewalDate\": \"2024-02-01T00:00:00.000Z\",\n  \"isAutoRenewed\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/subscriptions/:id/renew",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								":id",
+								"renew"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{subscription_id}}",
+									"description": "Subscription UUID"
+								}
+							]
+						},
+						"description": "Renew an expired or expiring subscription. Requires SUBSCRIPTIONS_RENEW capability. renewalDate is optional (defaults to current endDate)."
+					},
+					"response": []
+				},
+				{
+					"name": "Upgrade Subscription",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"newPlanId\": \"{{service_plan_id}}\",\n  \"effectiveDate\": \"2024-01-15T00:00:00.000Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/subscriptions/:id/upgrade",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								":id",
+								"upgrade"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{subscription_id}}",
+									"description": "Subscription UUID"
+								}
+							]
+						},
+						"description": "Upgrade subscription to a higher-tier plan. Requires SUBSCRIPTIONS_UPGRADE capability. effectiveDate is optional (defaults to now). Automatically adjusts bandwidth allocation."
+					},
+					"response": []
+				},
+				{
+					"name": "Terminate Subscription",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/subscriptions/:id/terminate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								":id",
+								"terminate"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{subscription_id}}",
+									"description": "Subscription UUID"
+								}
+							]
+						},
+						"description": "Terminate an active subscription. Requires SUBSCRIPTIONS_TERMINATE capability. Releases bandwidth allocation back to POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Usage Log",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"downloadMb\": 1024,\n  \"uploadMb\": 512,\n  \"logDate\": \"2024-01-15T00:00:00.000Z\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/subscriptions/:id/usage-log",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								":id",
+								"usage-log"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{subscription_id}}",
+									"description": "Subscription UUID"
+								}
+							]
+						},
+						"description": "Create a usage log entry for a subscription. Requires USAGE_LOGS_CREATE capability. Automatically throttles subscription if data cap is exceeded. downloadMb and uploadMb are in megabytes."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Usage Logs",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/subscriptions/:id/usage-log",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"subscriptions",
+								":id",
+								"usage-log"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{subscription_id}}",
+									"description": "Subscription UUID"
+								}
+							]
+						},
+						"description": "Get all usage logs for a subscription. Requires USAGE_LOGS_READ capability."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "07. Invoices Management",
+			"description": "Invoice management - Create, read, cancel invoices. Invoice status is calculated from payments (UNPAID, PAID, OVERDUE).",
+			"item": [
+				{
+					"name": "Create Invoice",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"subscriptionId\": \"{{subscription_id}}\",\n  \"amount\": 100.00,\n  \"issueDate\": \"2024-01-01T00:00:00.000Z\",\n  \"dueDate\": \"2024-01-31T23:59:59.999Z\",\n  \"notes\": \"Monthly subscription invoice\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/invoices",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"invoices"
+							]
+						},
+						"description": "Create a new invoice for a client. Requires INVOICES_CREATE capability (WSP_ADMIN or SUB_ADMIN). subscriptionId is optional. Invoice number is auto-generated. Issue date must be before or equal to due date."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Invoices",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/invoices?status=UNPAID&clientId={{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"invoices"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "UNPAID",
+									"description": "Filter by calculated status (UNPAID/PAID/OVERDUE)",
+									"disabled": true
+								},
+								{
+									"key": "clientId",
+									"value": "{{client_id}}",
+									"description": "Filter by client ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all invoices with optional filters. Requires INVOICES_READ capability. POS_MANAGER only sees invoices from their POS clients. Status is calculated from payments."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Invoice by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/invoices/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"invoices",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{invoice_id}}",
+									"description": "Invoice UUID"
+								}
+							]
+						},
+						"description": "Get a specific invoice by ID with all associated payments. Requires INVOICES_READ capability. Returns calculated status based on payments."
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Invoice",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/invoices/:id/cancel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"invoices",
+								":id",
+								"cancel"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{invoice_id}}",
+									"description": "Invoice UUID"
+								}
+							]
+						},
+						"description": "Cancel an invoice. Requires INVOICES_CANCEL capability (WSP_ADMIN or SUB_ADMIN). Adds [CANCELLED] prefix to invoice notes. Returns invoice with calculated status."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "08. Payments Management",
+			"description": "Payment management - Create and read payments. Payments are linked to invoices. Supports partial payments and extra amounts.",
+			"item": [
+				{
+					"name": "Create Payment - Full Payment",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"invoiceId\": \"{{invoice_id}}\",\n  \"amountPaid\": 100.00,\n  \"extraAmount\": 0,\n  \"paymentMethod\": \"CASH\",\n  \"paymentReference\": \"REF-12345\",\n  \"notes\": \"Full payment received\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"payments"
+							]
+						},
+						"description": "Create a payment for an invoice. Requires PAYMENTS_CREATE capability. POS_MANAGER needs explicit PAYMENTS_CREATE capability. Payment methods: CASH, BANK_TRANSFER, CARD, ONLINE. amountPaid and extraAmount must be >= 0."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Payment - Partial Payment",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"invoiceId\": \"{{invoice_id}}\",\n  \"amountPaid\": 50.00,\n  \"extraAmount\": 0,\n  \"paymentMethod\": \"BANK_TRANSFER\",\n  \"paymentReference\": \"TRX-67890\",\n  \"notes\": \"Partial payment - remaining balance pending\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"payments"
+							]
+						},
+						"description": "Create a partial payment. Multiple payments can be made for the same invoice. Total payments (amountPaid + extraAmount) can exceed invoice amount."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Payment - With Extra Amount",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"invoiceId\": \"{{invoice_id}}\",\n  \"amountPaid\": 100.00,\n  \"extraAmount\": 10.00,\n  \"paymentMethod\": \"CARD\",\n  \"paymentReference\": \"CARD-11111\",\n  \"notes\": \"Payment with extra amount for account credit\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"payments"
+							]
+						},
+						"description": "Create a payment with extra amount. Extra amount can be used for account credit or future invoices."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Payments",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/payments?paymentMethod=CASH&invoiceId={{invoice_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"payments"
+							],
+							"query": [
+								{
+									"key": "paymentMethod",
+									"value": "CASH",
+									"description": "Filter by payment method",
+									"disabled": true
+								},
+								{
+									"key": "invoiceId",
+									"value": "{{invoice_id}}",
+									"description": "Filter by invoice ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all payments with optional filters. Requires PAYMENTS_READ capability. POS_MANAGER only sees payments for invoices from their POS clients."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Payment by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/payments/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"payments",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{payment_id}}",
+									"description": "Payment UUID"
+								}
+							]
+						},
+						"description": "Get a specific payment by ID with invoice details. Requires PAYMENTS_READ capability."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "09. Static IP Management",
+			"description": "Static IP pool management - Create, read, update static IPs. Manage IP assignments and availability.",
+			"item": [
+				{
+					"name": "Create Static IP",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"posId\": \"{{pos_id}}\",\n  \"ipAddress\": \"192.168.1.100\",\n  \"subnetMask\": \"255.255.255.0\",\n  \"gateway\": \"192.168.1.1\",\n  \"dnsPrimary\": \"8.8.8.8\",\n  \"dnsSecondary\": \"8.8.4.4\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/static-ip",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"static-ip"
+							]
+						},
+						"description": "Create a new static IP in the pool. Requires STATIC_IP_CREATE capability. IP address must be unique. DNS servers are optional."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Static IPs",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/static-ip?posId={{pos_id}}&status=AVAILABLE",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"static-ip"
+							],
+							"query": [
+								{
+									"key": "posId",
+									"value": "{{pos_id}}",
+									"description": "Filter by POS ID",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "AVAILABLE",
+									"description": "Filter by status (AVAILABLE/ASSIGNED/RESERVED)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all static IPs with optional filters. Requires STATIC_IP_READ capability. POS_MANAGER only sees IPs from their POS."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Static IP by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/static-ip/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"static-ip",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{static_ip_id}}",
+									"description": "Static IP UUID"
+								}
+							]
+						},
+						"description": "Get a specific static IP by ID with client assignment details. Requires STATIC_IP_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Static IP",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"subnetMask\": \"255.255.255.128\",\n  \"gateway\": \"192.168.1.1\",\n  \"dnsPrimary\": \"1.1.1.1\",\n  \"dnsSecondary\": \"1.0.0.1\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/static-ip/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"static-ip",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{static_ip_id}}",
+									"description": "Static IP UUID"
+								}
+							]
+						},
+						"description": "Update static IP configuration (subnet mask, gateway, DNS). Requires STATIC_IP_UPDATE capability. IP address cannot be changed."
+					},
+					"response": []
+				},
+				{
+					"name": "Release Static IP",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/static-ip/:id/release",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"static-ip",
+								":id",
+								"release"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{static_ip_id}}",
+									"description": "Static IP UUID"
+								}
+							]
+						},
+						"description": "Release a static IP from its current assignment. Requires STATIC_IP_UPDATE capability. Makes IP available for reassignment."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "10. PPPoE Requests Management",
+			"description": "PPPoE change request management - Create, read, approve, reject, complete PPPoE credential change requests.",
+			"item": [
+				{
+					"name": "Create PPPoE Request - Change Username",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"newUsername\": \"new_pppoe_username\",\n  \"reason\": \"Security update - username change requested\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests"
+							]
+						},
+						"description": "Create a PPPoE change request to update username. Requires PPPOE_REQUESTS_CREATE capability. CLIENT can only create requests for their own account. At least one of newUsername or newPassword must be provided."
+					},
+					"response": []
+				},
+				{
+					"name": "Create PPPoE Request - Change Password",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"newPassword\": \"NewSecurePassword123!\",\n  \"reason\": \"Password reset requested by client\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests"
+							]
+						},
+						"description": "Create a PPPoE change request to update password only."
+					},
+					"response": []
+				},
+				{
+					"name": "Create PPPoE Request - Change Both",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"clientId\": \"{{client_id}}\",\n  \"newUsername\": \"updated_pppoe_user\",\n  \"newPassword\": \"UpdatedSecurePass456!\",\n  \"reason\": \"Complete credential update for security\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests"
+							]
+						},
+						"description": "Create a PPPoE change request to update both username and password."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All PPPoE Requests",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests?status=PENDING&clientId={{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "PENDING",
+									"description": "Filter by status (PENDING/APPROVED/REJECTED/COMPLETED)",
+									"disabled": true
+								},
+								{
+									"key": "clientId",
+									"value": "{{client_id}}",
+									"description": "Filter by client ID",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all PPPoE requests with optional filters. Requires PPPOE_REQUESTS_READ capability. CLIENT only sees their own requests. POS_MANAGER only sees requests for their POS clients."
+					},
+					"response": []
+				},
+				{
+					"name": "Get PPPoE Request by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pppoe_request_id}}",
+									"description": "PPPoE Request UUID"
+								}
+							]
+						},
+						"description": "Get a specific PPPoE request by ID. Requires PPPOE_REQUESTS_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Approve PPPoE Request",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Approved - credentials updated successfully\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests/:id/approve",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests",
+								":id",
+								"approve"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pppoe_request_id}}",
+									"description": "PPPoE Request UUID"
+								}
+							]
+						},
+						"description": "Approve a pending PPPoE request. Requires PPPOE_REQUESTS_APPROVE capability. Automatically updates client's PPPoE credentials. Only PENDING requests can be approved. CLIENT role cannot approve requests."
+					},
+					"response": []
+				},
+				{
+					"name": "Reject PPPoE Request",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rejectionReason\": \"Username already exists in system\",\n  \"note\": \"Please choose a different username\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests/:id/reject",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests",
+								":id",
+								"reject"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pppoe_request_id}}",
+									"description": "PPPoE Request UUID"
+								}
+							]
+						},
+						"description": "Reject a pending PPPoE request. Requires PPPOE_REQUESTS_REJECT capability. rejectionReason is required. Only PENDING requests can be rejected."
+					},
+					"response": []
+				},
+				{
+					"name": "Complete PPPoE Request",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"technicianNote\": \"Configuration completed on router. Client notified.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pppoe-requests/:id/complete",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pppoe-requests",
+								":id",
+								"complete"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{pppoe_request_id}}",
+									"description": "PPPoE Request UUID"
+								}
+							]
+						},
+						"description": "Mark an approved PPPoE request as completed. Requires PPPOE_REQUESTS_APPROVE capability (WSP_ADMIN or SUB_ADMIN only). Used when physical configuration is complete."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "11. Suspension History",
+			"description": "Suspension history management - Read suspension and reactivation records for clients.",
+			"item": [
+				{
+					"name": "Get All Suspension History",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/suspension-history?clientId={{client_id}}&suspensionReason=NON_PAYMENT",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suspension-history"
+							],
+							"query": [
+								{
+									"key": "clientId",
+									"value": "{{client_id}}",
+									"description": "Filter by client ID",
+									"disabled": true
+								},
+								{
+									"key": "suspensionReason",
+									"value": "NON_PAYMENT",
+									"description": "Filter by reason (NON_PAYMENT/VIOLATION/MAINTENANCE/OTHER)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all suspension history records with optional filters. Requires SUSPENSION_HISTORY_READ capability. CLIENT only sees their own suspension history. POS_MANAGER only sees history for their POS clients."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Suspension History by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/suspension-history/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suspension-history",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{suspension_history_id}}",
+									"description": "Suspension History UUID"
+								}
+							]
+						},
+						"description": "Get a specific suspension history record by ID. Requires SUSPENSION_HISTORY_READ capability."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "12. Audit Logs",
+			"description": "Audit log management - Read system audit logs with advanced filtering options.",
+			"item": [
+				{
+					"name": "Get All Audit Logs",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/audit-logs?limit=100",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"audit-logs"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Limit results (1-1000, default: 100)"
+								},
+								{
+									"key": "userId",
+									"value": "{{user_id}}",
+									"description": "Filter by user ID",
+									"disabled": true
+								},
+								{
+									"key": "role",
+									"value": "WSP_ADMIN",
+									"description": "Filter by user role",
+									"disabled": true
+								},
+								{
+									"key": "entityType",
+									"value": "CLIENT",
+									"description": "Filter by entity type",
+									"disabled": true
+								},
+								{
+									"key": "entityId",
+									"value": "{{client_id}}",
+									"description": "Filter by entity ID",
+									"disabled": true
+								},
+								{
+									"key": "action",
+									"value": "CREATE",
+									"description": "Filter by action",
+									"disabled": true
+								},
+								{
+									"key": "posId",
+									"value": "{{pos_id}}",
+									"description": "Filter by POS ID",
+									"disabled": true
+								},
+								{
+									"key": "fromDate",
+									"value": "2024-01-01T00:00:00.000Z",
+									"description": "Filter from date (ISO string)",
+									"disabled": true
+								},
+								{
+									"key": "toDate",
+									"value": "2024-12-31T23:59:59.999Z",
+									"description": "Filter to date (ISO string)",
+									"disabled": true
+								},
+								{
+									"key": "ipAddress",
+									"value": "192.168.1.1",
+									"description": "Filter by IP address",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get all audit logs with advanced filtering. Requires AUDIT_LOGS_READ capability. CLIENT only sees logs related to their account. POS_MANAGER only sees logs for their POS operations."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Audit Log by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/audit-logs/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"audit-logs",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "{{audit_log_id}}",
+									"description": "Audit Log UUID"
+								}
+							]
+						},
+						"description": "Get a specific audit log by ID. Requires AUDIT_LOGS_READ capability."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "13. Bandwidth Pool Management",
+			"description": "Bandwidth pool management - Read and update total available bandwidth pool. Used for POS bandwidth allocation validation.",
+			"item": [
+				{
+					"name": "Get Bandwidth Pool Summary",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/bandwidth-pool",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"bandwidth-pool"
+							]
+						},
+						"description": "Get bandwidth pool summary including total bandwidth, allocated bandwidth, and available bandwidth. Requires BANDWIDTH_POOL_READ capability."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Bandwidth Pool",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{access_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"totalBandwidthMbps\": 20000\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/bandwidth-pool",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"bandwidth-pool"
+							]
+						},
+						"description": "Update total bandwidth pool capacity. Requires BANDWIDTH_POOL_UPDATE capability (WSP_ADMIN or SUB_ADMIN). New total must be >= currently allocated bandwidth across all POS."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
