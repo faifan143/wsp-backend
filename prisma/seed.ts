@@ -17,6 +17,7 @@ async function main() {
   await prisma.staticIpPool.deleteMany(); // Delete static IPs before clients and POS
   await prisma.client.deleteMany();
   await prisma.servicePlan.deleteMany();
+  await prisma.auditLog.deleteMany(); // Delete audit logs before users (foreign key constraint)
   await prisma.user.deleteMany();
   await prisma.pOS.deleteMany();
   await prisma.bandwidthPool.deleteMany();
