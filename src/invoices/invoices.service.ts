@@ -9,6 +9,8 @@ import { PrismaService } from '../common/prisma.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { AuditAction, EntityType, UserRole } from '@prisma/client';
 import { AuditLoggerService } from '../audit-logs/audit-logger.service';
+import * as ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
 
 type InvoiceStatus = 'PAID' | 'UNPAID' | 'OVERDUE';
 
@@ -360,6 +362,121 @@ export class InvoicesService {
     });
 
     return { ...cancelledInvoice, status };
+  }
+
+  async exportToExcel(query: any, currentUser: any): Promise<ExcelJS.Workbook> {
+    const invoices = await this.findAll(query, currentUser);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Invoices');
+
+    worksheet.columns = [
+      { header: 'Invoice Number', key: 'invoiceNumber', width: 20 },
+      { header: 'Client Name', key: 'clientName', width: 25 },
+      { header: 'Client Email', key: 'clientEmail', width: 30 },
+      { header: 'POS', key: 'posName', width: 20 },
+      { header: 'Amount', key: 'amount', width: 15 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Issue Date', key: 'issueDate', width: 15 },
+      { header: 'Due Date', key: 'dueDate', width: 15 },
+      { header: 'Total Paid', key: 'totalPaid', width: 15 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 18 },
+      { header: 'Payment Date', key: 'paymentDate', width: 15 },
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' },
+    };
+
+    invoices.forEach((invoice: any) => {
+      const totalPaid = invoice.payments.reduce((sum: number, payment: any) => {
+        return sum + Number(payment.amountPaid) + Number(payment.extraAmount);
+      }, 0);
+
+      const payment = invoice.payments && invoice.payments.length > 0 ? invoice.payments[0] : null;
+
+      worksheet.addRow({
+        invoiceNumber: invoice.invoiceNumber,
+        clientName: invoice.client.fullName,
+        clientEmail: invoice.client.email,
+        posName: invoice.client.pos.name,
+        amount: Number(invoice.amount).toFixed(2),
+        status: invoice.status,
+        issueDate: new Date(invoice.issueDate).toLocaleDateString(),
+        dueDate: new Date(invoice.dueDate).toLocaleDateString(),
+        totalPaid: totalPaid.toFixed(2),
+        paymentMethod: payment?.paymentMethod || 'N/A',
+        paymentDate: payment?.paymentDate ? new Date(payment.paymentDate).toLocaleDateString() : 'N/A',
+      });
+    });
+
+    worksheet.getColumn('amount').numFmt = '#,##0.00';
+    worksheet.getColumn('totalPaid').numFmt = '#,##0.00';
+
+    return workbook;
+  }
+
+  async exportToPDF(query: any, currentUser: any): Promise<InstanceType<typeof PDFDocument>> {
+    const invoices = await this.findAll(query, currentUser);
+
+    const doc = new PDFDocument({ margin: 50 });
+
+    doc.fontSize(20).text('Invoices Report', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(10).text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' });
+    doc.moveDown(2);
+
+    invoices.forEach((invoice: any, index: number) => {
+      if (index > 0) {
+        doc.addPage();
+      }
+
+      doc.fontSize(16).text(`Invoice: ${invoice.invoiceNumber}`, { underline: true });
+      doc.moveDown();
+
+      const totalPaid = invoice.payments.reduce((sum: number, payment: any) => {
+        return sum + Number(payment.amountPaid) + Number(payment.extraAmount);
+      }, 0);
+
+      const payment = invoice.payments && invoice.payments.length > 0 ? invoice.payments[0] : null;
+
+      doc.fontSize(12);
+      doc.text(`Client: ${invoice.client.fullName}`);
+      doc.text(`Email: ${invoice.client.email}`);
+      doc.text(`POS: ${invoice.client.pos.name}`);
+      doc.moveDown();
+
+      doc.text(`Amount: ${Number(invoice.amount).toFixed(2)}`);
+      doc.text(`Status: ${invoice.status}`);
+      doc.text(`Total Paid: ${totalPaid.toFixed(2)}`);
+      doc.moveDown();
+
+      doc.text(`Issue Date: ${new Date(invoice.issueDate).toLocaleDateString()}`);
+      doc.text(`Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}`);
+      doc.moveDown();
+
+      if (payment) {
+        doc.text(`Payment Method: ${payment.paymentMethod}`);
+        doc.text(`Payment Date: ${new Date(payment.paymentDate).toLocaleDateString()}`);
+        if (payment.paymentReference) {
+          doc.text(`Payment Reference: ${payment.paymentReference}`);
+        }
+        doc.moveDown();
+      }
+
+      if (invoice.notes) {
+        doc.text(`Notes: ${invoice.notes}`);
+        doc.moveDown();
+      }
+
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).stroke();
+      doc.moveDown();
+    });
+
+    return doc;
   }
 }
 

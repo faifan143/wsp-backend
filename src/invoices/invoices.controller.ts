@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   Request,
+  Response,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -38,6 +39,41 @@ export class InvoicesController {
   @Capabilities(Capability.INVOICES_READ)
   findAll(@Query() query: any, @Request() req) {
     return this.invoicesService.findAll(query, req.user);
+  }
+
+  @Get('export/excel')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.INVOICES_READ)
+  async exportToExcel(@Query() query: any, @Request() req, @Response() res) {
+    const workbook = await this.invoicesService.exportToExcel(query, req.user);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=invoices-${new Date().toISOString().split('T')[0]}.xlsx`,
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  }
+
+  @Get('export/pdf')
+  @Roles(UserRole.WSP_ADMIN, UserRole.SUB_ADMIN, UserRole.POS_MANAGER)
+  @Capabilities(Capability.INVOICES_READ)
+  async exportToPDF(@Query() query: any, @Request() req, @Response() res) {
+    const doc = await this.invoicesService.exportToPDF(query, req.user);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=invoices-${new Date().toISOString().split('T')[0]}.pdf`,
+    );
+
+    doc.pipe(res);
+    doc.end();
   }
 
   @Get(':id')

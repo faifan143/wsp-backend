@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { AuditAction, EntityType, UserRole } from '@prisma/client';
+import { SettingsService } from '../settings/settings.service';
 
 export interface AuditContext {
   userId: string | null; // null for system actions
@@ -21,7 +22,11 @@ export interface AuditLogParams {
 
 @Injectable()
 export class AuditLoggerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => SettingsService))
+    private readonly settingsService?: SettingsService,
+  ) {}
 
   async log(params: AuditLogParams): Promise<void> {
     const {
@@ -39,6 +44,18 @@ export class AuditLoggerService {
     // Skip logging if userId is null (system actions)
     if (!userId) {
       return;
+    }
+
+    // Check if audit logging is enabled
+    try {
+      if (this.settingsService) {
+        const isEnabled = await this.settingsService.isAuditLoggingEnabled();
+        if (!isEnabled) {
+          return;
+        }
+      }
+    } catch (err) {
+      // If settings service is not available or error occurs, continue with logging
     }
 
     try {

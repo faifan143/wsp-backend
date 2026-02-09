@@ -8,11 +8,13 @@ import { LocalStrategy } from './local.strategy';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaService } from '../common/prisma.service';
 import { AuditLogsModule } from '../audit-logs/audit-logs.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
     PassportModule,
     AuditLogsModule,
+    SettingsModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

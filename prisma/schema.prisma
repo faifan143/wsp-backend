@@ -184,10 +184,11 @@ model User {
   capabilities Capability[] @default([])
   posId        String?     @map("pos_id") @db.Uuid
   clientId     String?     @unique @map("client_id") @db.Uuid
-  isActive     Boolean     @default(true) @map("is_active")
-  lastLogin    DateTime?   @map("last_login")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
+  isActive         Boolean     @default(true) @map("is_active")
+  lastLogin        DateTime?   @map("last_login")
+  passwordChangedAt DateTime?  @map("password_changed_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
 
   pos                    POS?                 @relation(fields: [posId], references: [id])
   client                 Client?              @relation(fields: [clientId], references: [id])
@@ -197,6 +198,7 @@ model User {
   pppoeRequestsRequested PppoeChangeRequest[] @relation("RequestedBy")
   pppoeRequestsApproved  PppoeChangeRequest[] @relation("ApprovedBy")
   paymentsReceived       Payment[]            @relation("PaymentReceivedBy")
+  settingsUpdated        Settings[]           @relation("SettingsUpdatedBy")
 
   @@map("users")
 }
@@ -439,4 +441,18 @@ model AuditLog {
   user User @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
+}
+
+model Settings {
+  id                String   @id @default(uuid()) @db.Uuid
+  key               String   @unique
+  value             String
+  description       String?
+  updatedBy         String?  @map("updated_by") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  updatedByUser User? @relation("SettingsUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@map("settings")
 }

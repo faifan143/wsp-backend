@@ -65,6 +65,7 @@ export class UsersService {
       passwordHash,
       role: createUserDto.role,
       isActive: true,
+      passwordChangedAt: new Date(),
     };
 
     // Set posId or clientId based on role
@@ -260,6 +261,7 @@ export class UsersService {
     if (updateUserDto.password) {
       const saltRounds = 10;
       updateData.passwordHash = await bcrypt.hash(updateUserDto.password, saltRounds);
+      updateData.passwordChangedAt = new Date();
     }
 
     if (updateUserDto.role) {

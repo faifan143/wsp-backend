@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../common/prisma.service';
 import { AuditLoggerService } from '../audit-logs/audit-logger.service';
+import { SettingsService } from '../settings/settings.service';
 import { AuditAction, EntityType, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
@@ -11,6 +12,8 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private auditLogger: AuditLoggerService,
+    @Inject(forwardRef(() => SettingsService))
+    private settingsService: SettingsService,
   ) {}
 
   async validateUser(username: string, password: string): Promise<any> {
@@ -26,6 +29,8 @@ export class AuthService {
         isActive: true,
         posId: true,
         clientId: true,
+        passwordChangedAt: true,
+        createdAt: true,
       },
     });
 
@@ -44,6 +49,21 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check password expiry
+    const passwordExpiryDays = await this.settingsService.getPasswordExpiryDays();
+    if (passwordExpiryDays > 0) {
+      const passwordChangedAt = user.passwordChangedAt || user.createdAt;
+      const expiryDate = new Date(passwordChangedAt);
+      expiryDate.setDate(expiryDate.getDate() + passwordExpiryDays);
+      const now = new Date();
+
+      if (now > expiryDate) {
+        throw new UnauthorizedException(
+          'Your password has expired. Please change your password.',
+        );
+      }
     }
 
     // Update last login timestamp (use updateMany to avoid error if user doesn't exist)
