@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { UpdateSettingsDto } from './dto/update-settings.dto';
@@ -17,7 +19,8 @@ export class SettingsService {
 
   constructor(
     private prisma: PrismaService,
-    private auditLogger: AuditLoggerService,
+    @Inject(forwardRef(() => AuditLoggerService))
+    private auditLogger?: AuditLoggerService,
   ) {}
 
   private async getOrCreateSetting(key: string, defaultValue: string): Promise<string> {
@@ -109,20 +112,26 @@ export class SettingsService {
       });
     }
 
-    await this.auditLogger.log({
-      context: {
-        userId: currentUser.id,
-        userRole: currentUser.role as UserRole,
-        ipAddress: null,
-        userAgent: null,
-      },
-      action: AuditAction.UPDATE,
-      entityType: EntityType.AUDIT_LOG,
-      entityId: null,
-      oldValues: { [key]: oldValue },
-      newValues: { [key]: value },
-      description: `Update setting: ${key}`,
-    });
+    if (this.auditLogger) {
+      try {
+        await this.auditLogger.log({
+          context: {
+            userId: currentUser.id,
+            userRole: currentUser.role as UserRole,
+            ipAddress: null,
+            userAgent: null,
+          },
+          action: AuditAction.UPDATE,
+          entityType: EntityType.AUDIT_LOG,
+          entityId: null,
+          oldValues: { [key]: oldValue },
+          newValues: { [key]: value },
+          description: `Update setting: ${key}`,
+        });
+      } catch (error) {
+        // Ignore audit logging errors to prevent circular dependency issues
+      }
+    }
   }
 
   async isAuditLoggingEnabled(): Promise<boolean> {

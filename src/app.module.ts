@@ -15,6 +15,7 @@ import { BandwidthPoolModule } from './bandwidth-pool/bandwidth-pool.module';
 import { SuspensionHistoryModule } from './suspension-history/suspension-history.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { SettingsModule } from './settings/settings.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SettingsModule } from './settings/settings.module';
     SuspensionHistoryModule,
     AuditLogsModule,
     SettingsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [],

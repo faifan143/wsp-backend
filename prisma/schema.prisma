@@ -173,6 +173,25 @@ enum EntityType {
   USAGE_LOG
   SUSPENSION_HISTORY
   AUDIT_LOG
+  NOTIFICATION
+}
+
+enum NotificationType {
+  ALERT
+  PAYMENT_WARNING
+  BANDWIDTH_WARNING
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  FIREBASE
+  BOTH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
 }
 
 model User {
@@ -187,6 +206,8 @@ model User {
   isActive         Boolean     @default(true) @map("is_active")
   lastLogin        DateTime?   @map("last_login")
   passwordChangedAt DateTime?  @map("password_changed_at")
+  telegramChatId   String?     @map("telegram_chat_id")
+  firebaseToken    String?     @map("firebase_token")
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
@@ -199,6 +220,7 @@ model User {
   pppoeRequestsApproved  PppoeChangeRequest[] @relation("ApprovedBy")
   paymentsReceived       Payment[]            @relation("PaymentReceivedBy")
   settingsUpdated        Settings[]           @relation("SettingsUpdatedBy")
+  notifications          Notification[]        @relation("Notifications")
 
   @@map("users")
 }
@@ -455,4 +477,26 @@ model Settings {
   updatedByUser User? @relation("SettingsUpdatedBy", fields: [updatedBy], references: [id])
 
   @@map("settings")
+}
+
+model Notification {
+  id              String            @id @default(uuid()) @db.Uuid
+  type            NotificationType
+  channel         NotificationChannel @default(BOTH)
+  title           String
+  message         String
+  status          NotificationStatus @default(PENDING)
+  recipientId     String?           @map("recipient_id") @db.Uuid
+  recipientType   String?           @map("recipient_type")
+  telegramChatId  String?           @map("telegram_chat_id")
+  firebaseToken   String?           @map("firebase_token")
+  metadata        Json?
+  sentAt          DateTime?         @map("sent_at")
+  errorMessage    String?           @map("error_message")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  recipientUser User? @relation("Notifications", fields: [recipientId], references: [id])
+
+  @@map("notifications")
 }
