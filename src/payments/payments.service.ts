@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { AuditAction, EntityType, UserRole } from '@prisma/client';
+import { AuditAction, EntityType, UserRole, SubscriptionStatus } from '@prisma/client';
 import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 
 @Injectable()
@@ -54,35 +54,71 @@ export class PaymentsService {
     // Enforce RBAC
     await this.enforcePosScope(invoice.client.posId, currentUser, 'create');
 
+    // Enforce single payment per invoice - check if invoice already has a payment
+    if (invoice.payments && invoice.payments.length > 0) {
+      throw new BadRequestException(
+        'Invoice already has a payment. Only one payment per invoice is allowed.',
+      );
+    }
+
     // Validate amounts
     if (createPaymentDto.amountPaid < 0) {
       throw new BadRequestException('amountPaid must be greater than or equal to 0');
     }
 
-    const extraAmount = createPaymentDto.extraAmount ?? 0;
-    if (extraAmount < 0) {
-      throw new BadRequestException('extraAmount must be greater than or equal to 0');
+    // Remove extraAmount support - only exact payment allowed
+    if (createPaymentDto.extraAmount && createPaymentDto.extraAmount !== 0) {
+      throw new BadRequestException(
+        'extraAmount is not allowed. Payment must match invoice amount exactly.',
+      );
     }
 
-    // Compute total paid before this payment
-    const totalPaidBefore = invoice.payments.reduce((sum, payment) => {
-      return sum + Number(payment.amountPaid) + Number(payment.extraAmount);
-    }, 0);
+    // Validate payment amount matches invoice amount exactly
+    const invoiceAmount = Number(invoice.amount);
+    const paymentAmount = createPaymentDto.amountPaid;
 
-    // Compute incoming payment total
-    const incomingPaid = createPaymentDto.amountPaid + extraAmount;
+    if (paymentAmount !== invoiceAmount) {
+      throw new BadRequestException(
+        `Payment amount (${paymentAmount}) must exactly match invoice amount (${invoiceAmount})`,
+      );
+    }
 
-    // Create payment
-    const payment = await this.prisma.payment.create({
-      data: {
-        invoiceId: createPaymentDto.invoiceId,
-        amountPaid: createPaymentDto.amountPaid,
-        extraAmount: extraAmount,
-        paymentMethod: createPaymentDto.paymentMethod,
-        paymentReference: createPaymentDto.paymentReference,
-        notes: createPaymentDto.notes,
-        receivedBy: currentUser.id,
-      },
+    // Create payment and activate subscription if linked
+    const payment = await this.prisma.$transaction(async (tx) => {
+      // Create payment
+      const newPayment = await tx.payment.create({
+        data: {
+          invoiceId: createPaymentDto.invoiceId,
+          amountPaid: createPaymentDto.amountPaid,
+          extraAmount: 0, // No extra amount allowed
+          paymentMethod: createPaymentDto.paymentMethod,
+          paymentReference: createPaymentDto.paymentReference,
+          notes: createPaymentDto.notes,
+          receivedBy: currentUser.id,
+        },
+      });
+
+      // If invoice is linked to a subscription, activate it
+      if (invoice.subscriptionId) {
+        const subscription = await tx.subscription.findUnique({
+          where: { id: invoice.subscriptionId },
+        });
+
+        if (subscription && subscription.status !== SubscriptionStatus.ACTIVE) {
+          // Activate subscription after payment
+          await tx.subscription.update({
+            where: { id: invoice.subscriptionId },
+            data: { status: SubscriptionStatus.ACTIVE },
+          });
+        }
+      }
+
+      return newPayment;
+    });
+
+    // Fetch payment with relations for response
+    const paymentWithRelations = await this.prisma.payment.findUnique({
+      where: { id: payment.id },
       include: {
         invoice: {
           include: {
@@ -97,6 +133,7 @@ export class PaymentsService {
                 },
               },
             },
+            subscription: true,
           },
         },
         receivedByUser: {
@@ -125,14 +162,13 @@ export class PaymentsService {
       newValues: {
         invoiceId: payment.invoiceId,
         amountPaid: payment.amountPaid,
-        extraAmount: payment.extraAmount,
-        paymentMethod: payment.paymentMethod,
-        paymentReference: payment.paymentReference,
+        paymentMethod: paymentWithRelations?.paymentMethod || createPaymentDto.paymentMethod,
+        paymentReference: paymentWithRelations?.paymentReference || createPaymentDto.paymentReference,
       },
-      description: `Payment received for invoice ${invoice.invoiceNumber}`,
+      description: `Payment received for invoice ${invoice.invoiceNumber}. Subscription activated.`,
     });
 
-    return payment;
+    return paymentWithRelations;
   }
 
   async findAll(query: any, currentUser: any) {

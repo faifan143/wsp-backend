@@ -1,0 +1,27 @@
+# Solution approach
+
+For every prompt: **crawl** the codebase, **explore** relevant code, **analyze** the problem, and **plan** before implementing. Prefer solutions that are:
+
+- **Simple** — straightforward logic, avoid cleverness and indirection
+- **Minimal** — only what’s needed to satisfy the request; no extra features or code
+- **Well-separated and reusable** — clear boundaries, small focused units, reusable where it makes sense
+- **No nice-to-have** — skip optional improvements, polish, or “while we’re at it” changes unless explicitly asked
+- **No complex, overcomplicated, or over-refactored** — avoid unnecessary abstraction layers, indirection, or restructuring; keep it readable and direct
+- **No comments, TODOs, or eslint disable lines** — do not add any comments, TODO markers, or eslint-disable directives
+
+# Commit messages
+
+Write clear commit messages using the format:
+
+```
+<type>(<scope>): <short description>
+```
+
+- **type**: e.g. `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+- **scope**: optional, area of the codebase (e.g. `tolerance-stack`, `auth`, `user`)
+- **short description**: imperative, lowercase start, no period at the end
+
+Examples:
+- `feat(user): add user profile endpoint`
+- `fix(auth): resolve token expiration issue`
+- `refactor(tolerance-stack): simplify row-details panel`

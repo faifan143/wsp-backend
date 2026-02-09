@@ -3,13 +3,14 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { RenewSubscriptionDto } from './dto/renew-subscription.dto';
 import { UpgradeSubscriptionDto } from './dto/upgrade-subscription.dto';
 import { CreateUsageLogDto } from './dto/create-usage-log.dto';
-import { SubscriptionStatus, ClientStatus, AuditAction, EntityType, UserRole } from '@prisma/client';
+import { SubscriptionStatus, ClientStatus, AuditAction, EntityType, UserRole, ConnectionType, ServiceType } from '@prisma/client';
 import { AuditLoggerService } from '../audit-logs/audit-logger.service';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -46,6 +47,164 @@ export class SubscriptionsService {
         `You can only ${operation} subscriptions for clients in your POS`,
       );
     }
+  }
+
+  /**
+   * Validate client connection type requirements
+   */
+  private async validateConnectionTypeRequirements(client: any) {
+    if (client.connectionType === ConnectionType.STATIC) {
+      // STATIC clients must have a static IP assigned
+      const clientWithStaticIp = await this.prisma.client.findUnique({
+        where: { id: client.id },
+        include: { staticIp: true },
+      });
+
+      if (!clientWithStaticIp?.staticIp) {
+        throw new BadRequestException(
+          'STATIC connection type requires a static IP to be assigned to the client',
+        );
+      }
+    } else if (client.connectionType === ConnectionType.PPPOE) {
+      // PPPOE clients must have credentials
+      if (!client.pppoeUsername || !client.pppoePassword) {
+        throw new BadRequestException(
+          'PPPOE connection type requires PPPoE username and password to be set',
+        );
+      }
+    }
+    // DYNAMIC clients have no special requirements
+  }
+
+  /**
+   * Generate unique invoice number
+   */
+  private generateInvoiceNumber(): string {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0');
+    return `INV-${timestamp}-${random}`;
+  }
+
+  /**
+   * Build invoice notes with connection type and subscription details
+   */
+  private buildInvoiceNotes(
+    connectionType: ConnectionType,
+    planName: string,
+    startDate: Date,
+    endDate: Date,
+    client: any,
+  ): string {
+    const connectionDetails: string[] = [];
+    
+    if (connectionType === ConnectionType.STATIC && client.staticIp) {
+      connectionDetails.push(`Static IP: ${client.staticIp.ipAddress}`);
+    } else if (connectionType === ConnectionType.PPPOE && client.pppoeUsername) {
+      connectionDetails.push(`PPPoE Username: ${client.pppoeUsername}`);
+    }
+
+    const notes = [
+      `Connection Type: ${connectionType}`,
+      `Plan: ${planName}`,
+      `Subscription Period: ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+    ];
+
+    if (connectionDetails.length > 0) {
+      notes.push(`Connection Details: ${connectionDetails.join(', ')}`);
+    }
+
+    return notes.join('\n');
+  }
+
+  /**
+   * Auto-generate invoice for subscription
+   * This is called internally as part of subscription creation/renewal/upgrade
+   */
+  private async autoGenerateInvoice(
+    subscriptionId: string,
+    clientId: string,
+    planCost: Decimal,
+    startDate: Date,
+    endDate: Date,
+    connectionType: ConnectionType,
+    planName: string,
+    client: any,
+    currentUser: any,
+    tx?: any, // Transaction client (optional, uses this.prisma if not provided)
+  ) {
+    const prismaClient = tx || this.prisma;
+
+    // Generate unique invoice number
+    let invoiceNumber: string;
+    let attempts = 0;
+    do {
+      invoiceNumber = this.generateInvoiceNumber();
+      const existing = await prismaClient.invoice.findUnique({
+        where: { invoiceNumber },
+      });
+      if (!existing) break;
+      attempts++;
+      if (attempts > 10) {
+        throw new ConflictException('Failed to generate unique invoice number');
+      }
+    } while (true);
+
+    // Calculate dates
+    const issueDate = startDate;
+    const dueDate = new Date(issueDate);
+    dueDate.setDate(dueDate.getDate() + 30); // 30 days payment terms
+
+    // Build invoice notes
+    const notes = this.buildInvoiceNotes(
+      connectionType,
+      planName,
+      startDate,
+      endDate,
+      client,
+    );
+
+    // Create invoice
+    const invoice = await prismaClient.invoice.create({
+      data: {
+        clientId,
+        subscriptionId,
+        invoiceNumber,
+        amount: planCost,
+        issueDate,
+        dueDate,
+        notes,
+      },
+    });
+
+    // Audit log for invoice creation (only if not in transaction, or do it after transaction)
+    // Note: Audit logs should be outside transaction to avoid rollback
+    if (!tx) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.CREATE,
+        entityType: EntityType.INVOICE,
+        entityId: invoice.id,
+        oldValues: null,
+        newValues: {
+          invoiceNumber: invoice.invoiceNumber,
+          clientId: invoice.clientId,
+          subscriptionId: invoice.subscriptionId,
+          amount: invoice.amount,
+          issueDate: invoice.issueDate,
+          dueDate: invoice.dueDate,
+        },
+        description: `Auto-generated invoice for subscription ${subscriptionId}`,
+      });
+    }
+
+    return invoice;
   }
 
   /**
@@ -215,11 +374,12 @@ export class SubscriptionsService {
   }
 
   async create(createSubscriptionDto: CreateSubscriptionDto, currentUser: any) {
-    // Fetch client with POS
+    // Fetch client with POS and static IP
     const client = await this.prisma.client.findUnique({
       where: { id: createSubscriptionDto.clientId },
       include: {
         pos: true,
+        staticIp: true,
       },
     });
 
@@ -235,6 +395,9 @@ export class SubscriptionsService {
       throw new BadRequestException('Cannot create subscription for a terminated client');
     }
 
+    // Validate connection type requirements
+    await this.validateConnectionTypeRequirements(client);
+
     // Fetch service plan
     const servicePlan = await this.prisma.servicePlan.findUnique({
       where: { id: createSubscriptionDto.planId },
@@ -246,6 +409,13 @@ export class SubscriptionsService {
 
     if (!servicePlan.isActive) {
       throw new BadRequestException('Service plan is not active');
+    }
+
+    // Enforce PREPAID service type (all subscriptions must be PREPAID)
+    if (servicePlan.serviceType !== ServiceType.PREPAID) {
+      throw new BadRequestException(
+        'Only PREPAID service plans are allowed. Payment is required upfront before service activation.',
+      );
     }
 
     // Check for existing active subscription
@@ -269,54 +439,122 @@ export class SubscriptionsService {
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + servicePlan.durationDays);
 
-    // Create subscription
-    const subscription = await this.prisma.subscription.create({
-      data: {
-        clientId: createSubscriptionDto.clientId,
-        planId: createSubscriptionDto.planId,
+    // Use transaction to ensure atomicity: if invoice creation fails, subscription is rolled back
+    let invoiceId: string | null = null;
+    const subscription = await this.prisma.$transaction(async (tx) => {
+      // Create subscription
+      // Note: Status is ACTIVE but service is payment-gated (checked in usage logs)
+      const newSubscription = await tx.subscription.create({
+        data: {
+          clientId: createSubscriptionDto.clientId,
+          planId: createSubscriptionDto.planId,
+          startDate,
+          endDate,
+          status: SubscriptionStatus.ACTIVE,
+          bandwidthAllocatedMbps: servicePlan.downloadSpeedMbps,
+          originalBandwidthMbps: servicePlan.downloadSpeedMbps, // Store original bandwidth
+          isAutoRenewed: createSubscriptionDto.isAutoRenewed ?? false,
+        },
+      });
+
+      // Auto-generate invoice (if this fails, entire transaction rolls back)
+      const invoice = await this.autoGenerateInvoice(
+        newSubscription.id,
+        client.id,
+        servicePlan.cost,
         startDate,
         endDate,
-        status: SubscriptionStatus.ACTIVE,
-        bandwidthAllocatedMbps: servicePlan.downloadSpeedMbps,
-        originalBandwidthMbps: servicePlan.downloadSpeedMbps, // Store original bandwidth
-        isAutoRenewed: createSubscriptionDto.isAutoRenewed ?? false,
-      },
-      include: {
-        client: {
-          include: {
-            pos: {
-              select: {
-                id: true,
-                name: true,
-                location: true,
+        client.connectionType,
+        servicePlan.planName,
+        client,
+        currentUser,
+        tx, // Pass transaction client
+      );
+      invoiceId = invoice.id;
+
+      // Return subscription with relations
+      return tx.subscription.findUnique({
+        where: { id: newSubscription.id },
+        include: {
+          client: {
+            include: {
+              pos: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
               },
+              staticIp: true,
             },
           },
+          plan: true,
+          invoices: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 1, // Get the latest invoice
+          },
         },
-        plan: true,
-      },
+      });
     });
 
+    // Audit log for invoice (after transaction completes)
+    if (invoiceId && subscription) {
+      const invoice = await this.prisma.invoice.findUnique({
+        where: { id: invoiceId },
+      });
+      if (invoice) {
+        await this.auditLogger.log({
+          context: {
+            userId: currentUser.id,
+            userRole: currentUser.role as UserRole,
+            ipAddress: null,
+            userAgent: null,
+          },
+          action: AuditAction.CREATE,
+          entityType: EntityType.INVOICE,
+          entityId: invoice.id,
+          oldValues: null,
+          newValues: {
+            invoiceNumber: invoice.invoiceNumber,
+            clientId: invoice.clientId,
+            subscriptionId: invoice.subscriptionId,
+            amount: invoice.amount,
+            issueDate: invoice.issueDate,
+            dueDate: invoice.dueDate,
+          },
+          description: `Auto-generated invoice for subscription ${subscription.id}`,
+        });
+      }
+    }
+
     // Audit log
-    await this.auditLogger.log({
-      context: {
-        userId: currentUser.id,
-        userRole: currentUser.role as UserRole,
-        ipAddress: null,
-        userAgent: null,
-      },
-      action: AuditAction.CREATE,
-      entityType: EntityType.SUBSCRIPTION,
-      entityId: subscription.id,
-      oldValues: null,
-      newValues: {
-        clientId: subscription.clientId,
-        planId: subscription.planId,
-        status: subscription.status,
-        startDate: subscription.startDate,
-        endDate: subscription.endDate,
-      },
-    });
+    if (subscription) {
+      await this.auditLogger.log({
+        context: {
+          userId: currentUser.id,
+          userRole: currentUser.role as UserRole,
+          ipAddress: null,
+          userAgent: null,
+        },
+        action: AuditAction.CREATE,
+        entityType: EntityType.SUBSCRIPTION,
+        entityId: subscription.id,
+        oldValues: null,
+        newValues: {
+          clientId: subscription.clientId,
+          planId: subscription.planId,
+          status: subscription.status,
+          startDate: subscription.startDate,
+          endDate: subscription.endDate,
+        },
+      });
+    }
+
+    if (!subscription) {
+      throw new BadRequestException('Failed to create subscription');
+    }
 
     return subscription;
   }
@@ -461,8 +699,21 @@ export class SubscriptionsService {
     const subscription = await this.prisma.subscription.findUnique({
       where: { id },
       include: {
-        client: true,
+        client: {
+          include: {
+            staticIp: true,
+          },
+        },
         plan: true,
+        invoices: {
+          include: {
+            payments: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1, // Get latest invoice
+        },
       },
     });
 
@@ -481,6 +732,30 @@ export class SubscriptionsService {
     // Ensure subscription is not terminated
     if (subscription.status === SubscriptionStatus.TERMINATED) {
       throw new BadRequestException('Cannot renew a terminated subscription');
+    }
+
+    // Check if current invoice is paid before allowing renewal (auto-renewal payment check)
+    if (subscription.invoices && subscription.invoices.length > 0) {
+      const latestInvoice = subscription.invoices[0];
+      const totalPaid = latestInvoice.payments.reduce((sum, payment) => {
+        return sum + Number(payment.amountPaid);
+      }, 0);
+
+      if (totalPaid < Number(latestInvoice.amount)) {
+        throw new BadRequestException(
+          `Cannot renew subscription. Current invoice (${latestInvoice.invoiceNumber}) is unpaid. Please pay the invoice first before renewing.`,
+        );
+      }
+    }
+
+    // Validate connection type requirements
+    await this.validateConnectionTypeRequirements(subscription.client);
+
+    // Enforce PREPAID service type
+    if (subscription.plan.serviceType !== ServiceType.PREPAID) {
+      throw new BadRequestException(
+        'Only PREPAID service plans are allowed. Payment is required upfront before service activation.',
+      );
     }
 
     // Determine renewal start date
@@ -505,33 +780,93 @@ export class SubscriptionsService {
       throw new BadRequestException('Client already has another active subscription');
     }
 
-    // Update subscription - reset bandwidth on renewal (new period starts)
-    // This restores bandwidth if it was throttled and resets the original bandwidth
-    const renewedSubscription = await this.prisma.subscription.update({
-      where: { id },
-      data: {
-        startDate: renewalStartDate,
-        endDate: newEndDate,
-        status: SubscriptionStatus.ACTIVE,
-        isAutoRenewed: renewSubscriptionDto.isAutoRenewed ?? subscription.isAutoRenewed,
-        bandwidthAllocatedMbps: subscription.plan.downloadSpeedMbps, // Restore to plan's original speed
-        originalBandwidthMbps: subscription.plan.downloadSpeedMbps, // Reset original bandwidth for new period
-      },
-      include: {
-        client: {
-          include: {
-            pos: {
-              select: {
-                id: true,
-                name: true,
-                location: true,
+    // Use transaction to ensure atomicity
+    let invoiceId: string | null = null;
+    const renewedSubscription = await this.prisma.$transaction(async (tx) => {
+      // Update subscription - reset bandwidth on renewal (new period starts)
+      const updatedSubscription = await tx.subscription.update({
+        where: { id },
+        data: {
+          startDate: renewalStartDate,
+          endDate: newEndDate,
+          status: SubscriptionStatus.ACTIVE,
+          isAutoRenewed: renewSubscriptionDto.isAutoRenewed ?? subscription.isAutoRenewed,
+          bandwidthAllocatedMbps: subscription.plan.downloadSpeedMbps, // Restore to plan's original speed
+          originalBandwidthMbps: subscription.plan.downloadSpeedMbps, // Reset original bandwidth for new period
+        },
+      });
+
+      // Auto-generate invoice for renewal
+      const invoice = await this.autoGenerateInvoice(
+        updatedSubscription.id,
+        subscription.clientId,
+        subscription.plan.cost,
+        renewalStartDate,
+        newEndDate,
+        subscription.client.connectionType,
+        subscription.plan.planName,
+        subscription.client,
+        currentUser,
+        tx, // Pass transaction client
+      );
+      invoiceId = invoice.id;
+
+      // Return subscription with relations
+      return tx.subscription.findUnique({
+        where: { id: updatedSubscription.id },
+        include: {
+          client: {
+            include: {
+              pos: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
               },
+              staticIp: true,
             },
           },
+          plan: true,
+          invoices: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 1, // Get the latest invoice
+          },
         },
-        plan: true,
-      },
+      });
     });
+
+    // Audit log for invoice (after transaction completes)
+    if (invoiceId && renewedSubscription) {
+      const invoice = await this.prisma.invoice.findUnique({
+        where: { id: invoiceId },
+      });
+      if (invoice) {
+        await this.auditLogger.log({
+          context: {
+            userId: currentUser.id,
+            userRole: currentUser.role as UserRole,
+            ipAddress: null,
+            userAgent: null,
+          },
+          action: AuditAction.CREATE,
+          entityType: EntityType.INVOICE,
+          entityId: invoice.id,
+          oldValues: null,
+          newValues: {
+            invoiceNumber: invoice.invoiceNumber,
+            clientId: invoice.clientId,
+            subscriptionId: invoice.subscriptionId,
+            amount: invoice.amount,
+            issueDate: invoice.issueDate,
+            dueDate: invoice.dueDate,
+          },
+          description: `Auto-generated invoice for subscription renewal ${renewedSubscription.id}`,
+        });
+      }
+    }
 
     // Audit log
     await this.auditLogger.log({
@@ -562,7 +897,11 @@ export class SubscriptionsService {
     const oldSubscription = await this.prisma.subscription.findUnique({
       where: { id },
       include: {
-        client: true,
+        client: {
+          include: {
+            staticIp: true,
+          },
+        },
         plan: true,
       },
     });
@@ -579,6 +918,9 @@ export class SubscriptionsService {
       throw new BadRequestException('Cannot upgrade a terminated subscription');
     }
 
+    // Validate connection type requirements
+    await this.validateConnectionTypeRequirements(oldSubscription.client);
+
     // Fetch new plan
     const newPlan = await this.prisma.servicePlan.findUnique({
       where: { id: upgradeSubscriptionDto.newPlanId },
@@ -592,15 +934,37 @@ export class SubscriptionsService {
       throw new BadRequestException('New service plan is not active');
     }
 
+    // Enforce PREPAID service type
+    if (newPlan.serviceType !== ServiceType.PREPAID) {
+      throw new BadRequestException(
+        'Only PREPAID service plans are allowed. Payment is required upfront before service activation.',
+      );
+    }
+
     // Check if upgrading to same plan
     if (oldSubscription.planId === upgradeSubscriptionDto.newPlanId) {
       throw new BadRequestException('Subscription is already using this plan');
     }
 
-    // Determine effective date
+    // Prevent upgrade before subscription ends
+    const now = new Date();
+    if (oldSubscription.endDate > now) {
+      throw new BadRequestException(
+        `Cannot upgrade subscription before it ends. Current subscription ends on ${oldSubscription.endDate.toISOString().split('T')[0]}. Please wait until the subscription period ends.`,
+      );
+    }
+
+    // Determine effective date (must be after current end date)
     const effectiveDate = upgradeSubscriptionDto.effectiveDate
       ? new Date(upgradeSubscriptionDto.effectiveDate)
-      : new Date();
+      : new Date(oldSubscription.endDate);
+
+    // Ensure effective date is not before current end date
+    if (effectiveDate < oldSubscription.endDate) {
+      throw new BadRequestException(
+        `Upgrade effective date cannot be before current subscription end date (${oldSubscription.endDate.toISOString().split('T')[0]})`,
+      );
+    }
 
     // Check for other active subscriptions
     const otherActiveSubscription = await this.prisma.subscription.findFirst({
@@ -619,46 +983,107 @@ export class SubscriptionsService {
     const newEndDate = new Date(effectiveDate);
     newEndDate.setDate(newEndDate.getDate() + newPlan.durationDays);
 
-    // Terminate old subscription
-    await this.prisma.subscription.update({
-      where: { id },
-      data: { status: SubscriptionStatus.TERMINATED },
-    });
+    // Use transaction to ensure atomicity
+    let invoiceId: string | null = null;
+    const newSubscription = await this.prisma.$transaction(async (tx) => {
+      // Terminate old subscription
+      await tx.subscription.update({
+        where: { id },
+        data: { status: SubscriptionStatus.TERMINATED },
+      });
 
-    // Create new subscription
-    const newSubscription = await this.prisma.subscription.create({
-      data: {
-        clientId: oldSubscription.clientId,
-        planId: newPlan.id,
-        startDate: effectiveDate,
-        endDate: newEndDate,
-        status: SubscriptionStatus.ACTIVE,
-        bandwidthAllocatedMbps: newPlan.downloadSpeedMbps,
-        originalBandwidthMbps: newPlan.downloadSpeedMbps, // Store original bandwidth for new plan
-        isAutoRenewed: false,
-        upgradedToSubscriptionId: null,
-      },
-      include: {
-        client: {
-          include: {
-            pos: {
-              select: {
-                id: true,
-                name: true,
-                location: true,
+      // Create new subscription
+      const createdSubscription = await tx.subscription.create({
+        data: {
+          clientId: oldSubscription.clientId,
+          planId: newPlan.id,
+          startDate: effectiveDate,
+          endDate: newEndDate,
+          status: SubscriptionStatus.ACTIVE,
+          bandwidthAllocatedMbps: newPlan.downloadSpeedMbps,
+          originalBandwidthMbps: newPlan.downloadSpeedMbps, // Store original bandwidth for new plan
+          isAutoRenewed: false,
+          upgradedToSubscriptionId: null,
+        },
+      });
+
+      // Link old subscription to new one
+      await tx.subscription.update({
+        where: { id },
+        data: { upgradedToSubscriptionId: createdSubscription.id },
+      });
+
+      // Auto-generate invoice for upgrade
+      const invoice = await this.autoGenerateInvoice(
+        createdSubscription.id,
+        oldSubscription.clientId,
+        newPlan.cost,
+        effectiveDate,
+        newEndDate,
+        oldSubscription.client.connectionType,
+        newPlan.planName,
+        oldSubscription.client,
+        currentUser,
+        tx, // Pass transaction client
+      );
+      invoiceId = invoice.id;
+
+      // Return subscription with relations
+      return tx.subscription.findUnique({
+        where: { id: createdSubscription.id },
+        include: {
+          client: {
+            include: {
+              pos: {
+                select: {
+                  id: true,
+                  name: true,
+                  location: true,
+                },
               },
+              staticIp: true,
             },
           },
+          plan: true,
+          invoices: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 1, // Get the latest invoice
+          },
         },
-        plan: true,
-      },
+      });
     });
 
-    // Link old subscription to new one
-    await this.prisma.subscription.update({
-      where: { id },
-      data: { upgradedToSubscriptionId: newSubscription.id },
-    });
+    // Audit log for invoice (after transaction completes)
+    if (invoiceId && newSubscription) {
+      const invoice = await this.prisma.invoice.findUnique({
+        where: { id: invoiceId },
+      });
+      if (invoice) {
+        await this.auditLogger.log({
+          context: {
+            userId: currentUser.id,
+            userRole: currentUser.role as UserRole,
+            ipAddress: null,
+            userAgent: null,
+          },
+          action: AuditAction.CREATE,
+          entityType: EntityType.INVOICE,
+          entityId: invoice.id,
+          oldValues: null,
+          newValues: {
+            invoiceNumber: invoice.invoiceNumber,
+            clientId: invoice.clientId,
+            subscriptionId: invoice.subscriptionId,
+            amount: invoice.amount,
+            issueDate: invoice.issueDate,
+            dueDate: invoice.dueDate,
+          },
+          description: `Auto-generated invoice for subscription upgrade ${newSubscription.id}`,
+        });
+      }
+    }
 
     // Audit log
     await this.auditLogger.log({
@@ -670,21 +1095,123 @@ export class SubscriptionsService {
       },
       action: AuditAction.UPGRADE,
       entityType: EntityType.SUBSCRIPTION,
-      entityId: newSubscription.id,
+      entityId: newSubscription?.id || id,
       oldValues: {
         subscriptionId: id,
         planId: oldSubscription.planId,
         planName: oldSubscription.plan.planName,
       },
       newValues: {
-        subscriptionId: newSubscription.id,
+        subscriptionId: newSubscription?.id || '',
         planId: newPlan.id,
         planName: newPlan.planName,
       },
       description: `Upgrade subscription from plan ${oldSubscription.plan.planName} to ${newPlan.planName}`,
     });
 
+    if (!newSubscription) {
+      throw new BadRequestException('Failed to upgrade subscription');
+    }
+
     return newSubscription;
+  }
+
+  /**
+   * Check if subscription invoice is paid (payment-gated service)
+   */
+  private async isSubscriptionInvoicePaid(subscriptionId: string): Promise<boolean> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        invoices: {
+          include: {
+            payments: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1, // Get the latest invoice
+        },
+      },
+    });
+
+    if (!subscription || !subscription.invoices || subscription.invoices.length === 0) {
+      return false; // No invoice means not paid
+    }
+
+    const latestInvoice = subscription.invoices[0];
+    const totalPaid = latestInvoice.payments.reduce((sum, payment) => {
+      return sum + Number(payment.amountPaid);
+    }, 0);
+
+    return totalPaid >= Number(latestInvoice.amount);
+  }
+
+  /**
+   * Check and mark expired subscriptions
+   * This should be called manually or via scheduled job
+   */
+  async checkAndMarkExpiredSubscriptions() {
+    const now = new Date();
+    const expiredSubscriptions = await this.prisma.subscription.findMany({
+      where: {
+        endDate: { lt: now },
+        status: SubscriptionStatus.ACTIVE,
+      },
+      include: {
+        client: true,
+        invoices: {
+          include: {
+            payments: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
+
+    const results: Array<{
+      subscriptionId: string;
+      clientId: string;
+      action: string;
+      message: string;
+    }> = [];
+
+    for (const subscription of expiredSubscriptions) {
+      // Check if invoice is unpaid
+      const isPaid = subscription.invoices && subscription.invoices.length > 0
+        ? subscription.invoices[0].payments.reduce((sum, p) => sum + Number(p.amountPaid), 0) >= Number(subscription.invoices[0].amount)
+        : false;
+
+      // Mark as EXPIRED
+      await this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { status: SubscriptionStatus.EXPIRED },
+      });
+
+      // Suspend client service if subscription expired with unpaid invoice
+      if (!isPaid && subscription.client.status === ClientStatus.ACTIVE) {
+        // Note: Client suspension should be handled separately via clients service
+        // This is just for tracking
+        results.push({
+          subscriptionId: subscription.id,
+          clientId: subscription.clientId,
+          action: 'EXPIRED_UNPAID',
+          message: 'Subscription expired with unpaid invoice. Client service should be suspended.',
+        });
+      } else {
+        results.push({
+          subscriptionId: subscription.id,
+          clientId: subscription.clientId,
+          action: 'EXPIRED',
+          message: 'Subscription expired. Ready for renewal.',
+        });
+      }
+    }
+
+    return results;
   }
 
   async createUsageLog(subscriptionId: string, createUsageLogDto: CreateUsageLogDto, currentUser: any) {
@@ -692,6 +1219,15 @@ export class SubscriptionsService {
       where: { id: subscriptionId },
       include: {
         client: true,
+        invoices: {
+          include: {
+            payments: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
       },
     });
 
@@ -707,8 +1243,35 @@ export class SubscriptionsService {
       throw new BadRequestException('Cannot log usage for a terminated subscription');
     }
 
-    // Validate log date is not in the future
+    // Ensure subscription is not expired
+    if (subscription.status === SubscriptionStatus.EXPIRED) {
+      throw new BadRequestException('Cannot log usage for an expired subscription. Please renew the subscription.');
+    }
+
+    // Check if client is suspended (logical solution for scenario 5.3)
+    if (subscription.client.status === ClientStatus.SUSPENDED) {
+      throw new BadRequestException(
+        'Cannot log usage for a suspended client. Service is disconnected. Please reactivate the client first.',
+      );
+    }
+
+    // Payment-gated service: Check if invoice is paid
+    const isPaid = await this.isSubscriptionInvoicePaid(subscriptionId);
+    if (!isPaid) {
+      throw new BadRequestException(
+        'Service is not active. Payment is required before service can be used. Please pay the invoice first.',
+      );
+    }
+
+    // Validate subscription period
     const logDate = new Date(createUsageLogDto.logDate);
+    if (logDate < subscription.startDate || logDate > subscription.endDate) {
+      throw new BadRequestException(
+        'Usage log date is outside the subscription period. Please check subscription dates.',
+      );
+    }
+
+    // Validate log date is not in the future
     const now = new Date();
     if (logDate > now) {
       throw new BadRequestException('Log date cannot be in the future');
