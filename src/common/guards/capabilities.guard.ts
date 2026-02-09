@@ -51,7 +51,7 @@ export class CapabilitiesGuard implements CanActivate {
     // However, for certain operations (like payments), they need explicit capabilities
     if (user.role === 'POS_MANAGER') {
       // Check if this is a payment-related capability that requires explicit permission
-      const paymentCapabilities = [
+      const paymentCapabilities: Capability[] = [
         Capability.PAYMENTS_CREATE,
         Capability.PAYMENTS_READ,
       ];
